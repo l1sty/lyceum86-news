@@ -1,0 +1,4 @@
+import Link from 'next/link';
+import { ArrowUpRight } from 'lucide-react';
+import { school } from '@/lib/content';
+export default function Footer() { return <footer className="site-footer"><div className="container"><div className="footer-top"><div><Link href="/" className="footer-title">Одеський ліцей № 86<span className="small-dot" /></Link><p>Простір новин, ідей та спільних історій.</p></div><div className="footer-links"><Link href="/about">Про ліцей</Link><Link href="/contacts">Контакти</Link><Link href="/privacy">Приватність</Link><Link href="/admin">Для адміністрації <ArrowUpRight size={14}/></Link></div></div><div className="footer-bottom"><span>Одеса, Україна</span><a href={school.website} target="_blank" rel="noreferrer">Офіційний сайт закладу <ArrowUpRight size={13}/></a><span>Інформацію перевірено 06.11.2026</span></div></div></footer>; }

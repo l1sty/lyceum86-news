@@ -1,0 +1,7 @@
+'use client';
+import { useActionState } from 'react';
+import { moderate } from '@/app/admin/actions';
+export default function ModerationControls({ id, mode = 'message' }: { id: string; mode?: 'message' | 'report' | 'ban' | 'unban' }) {
+  const [state, action, pending] = useActionState(moderate, {});
+  return <div><form action={action} className="moderation-actions"><input name="id" type="hidden" value={id}/>{mode === 'message' ? <><button name="action" value="approved" className="button button-dark button-small" disabled={pending}>Схвалити</button><button name="action" value="rejected" className="button button-outline button-small" disabled={pending}>Приховати</button></> : mode === 'ban' ? <><label className="sr-only" htmlFor={`ban-${id}`}>Причина обмеження</label><input id={`ban-${id}`} name="reason" required minLength={3} maxLength={300} placeholder="Причина обмеження"/><button name="action" value="ban" className="button button-outline button-small" disabled={pending}>Обмежити на 24 години</button></> : <button name="action" value={mode === 'report' ? 'dismiss' : 'unban'} className="button button-outline button-small" disabled={pending}>{mode === 'report' ? 'Закрити скаргу' : 'Зняти обмеження'}</button>}</form>{state.error && <p className="form-status error mt-3" role="alert">{state.error}</p>}{state.success && <p className="form-status mt-3" role="status">{state.success}</p>}</div>;
+}

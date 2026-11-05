@@ -1,0 +1,6 @@
+{
+  "name": "odesa-lyceum-86", "version": "1.0.0", "private": true, "type": "module",
+  "scripts": { "dev": "next dev --hostname 127.0.0.1", "build": "next build", "start": "next start --hostname 127.0.0.1", "typecheck": "tsc --noEmit", "test": "tsx --test tests/*.test.ts", "test:database": "tsx --test tests/database.integration.ts" },
+  "dependencies": { "next": "16.4.5", "react": "^19.2.0", "react-dom": "^19.2.0", "@supabase/supabase-js": "2.119.0", "@supabase/ssr": "^0.8.0", "motion": "14.9.1", "lucide-react": "^0.468.0", "zod": "^4.1.0", "@fontsource-variable/manrope": "^5.2.0" },
+  "devDependencies": { "typescript": "^5.9.0", "@types/node": "^22.0.0", "@types/react": "^19.2.0", "@types/react-dom": "^19.2.0", "tailwindcss": "^4.1.0", "@tailwindcss/postcss": "^4.1.0", "tsx": "^4.20.0", "@electric-sql/pglite": "^0.3.0" }
+}

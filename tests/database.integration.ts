@@ -1,0 +1,47 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { PGlite } from '@electric-sql/pglite';
+
+test('PostgreSQL RLS, moderation, storage, rate limits and audit', async (t) => {
+  const db = new PGlite();
+  await db.exec(`create role anon; create role authenticated; create role service_role; create schema auth; create schema storage;
+    create table auth.users(id uuid primary key, raw_user_meta_data jsonb default '{}', email text, email_confirmed_at timestamptz);
+    create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
+    grant usage on schema auth, public, storage to anon, authenticated;
+    create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
+    create table storage.objects(id uuid primary key default gen_random_uuid(), bucket_id text, name text);
+    alter table storage.objects enable row level security;
+    grant select,insert,update,delete on storage.objects to anon,authenticated;
+    alter default privileges in schema public grant all on tables to anon,authenticated;
+    alter default privileges in schema public grant execute on functions to anon,authenticated,service_role;`);
+  const migration = await readFile(new URL('../supabase/migrations/202611060001_initial.sql',import.meta.url),'utf8');
+  await db.exec(migration);
+  const admin = '10000000-0000-4000-8000-000000000001', user = '10000000-0000-4000-8000-000000000002', other = '10000000-0000-4000-8000-000000000003';
+  await db.exec(`insert into auth.users(id,raw_user_meta_data,email) values('${admin}','{"display_name":"Модератор"}','admin@example.invalid'),('${user}','{"display_name":"Учасник","role":"admin"}','user@example.invalid'),('${other}','{"display_name":"Інший"}','other@example.invalid');`);
+  const as = async (id: string | null) => { await db.exec(`reset role; select set_config('request.jwt.claim.sub','${id || ''}',false); set role ${id ? 'authenticated' : 'anon'};`); };
+  const count = async (sql: string) => (await db.query(sql)).rows.length;
+  const post = `(slug,title,summary,body,category,published) values('test-post','Тестова новина','Перевірка доступу до новини','Повний текст для перевірки доступу.','Навчання',true)`;
+  await t.test('first admin requires an explicit database-owner action and confirmed email', async () => {
+    assert.equal(await count('select * from public.admin_users'),0);
+    await assert.rejects(db.exec(`select public.bootstrap_first_admin('${admin}')`), /CONFIRMED_EMAIL_USER_REQUIRED/);
+    await assert.rejects(db.exec(`select public.bootstrap_first_admin(null)`), /CONFIRMED_EMAIL_USER_REQUIRED/);
+    await assert.rejects(db.exec(`select public.bootstrap_first_admin('99999999-0000-4000-8000-000000000000')`), /CONFIRMED_EMAIL_USER_REQUIRED/);
+    await as(null); await assert.rejects(db.exec(`select public.bootstrap_first_admin('${user}')`), /permission denied/);
+    await as(user); await assert.rejects(db.exec(`select public.bootstrap_first_admin('${user}')`), /permission denied/);
+    await db.exec('reset role; set role service_role'); await assert.rejects(db.exec(`select public.bootstrap_first_admin('${user}')`), /permission denied/);
+    await db.exec(`reset role; update auth.users set email_confirmed_at=now() where id='${admin}'; select public.bootstrap_first_admin('${admin}')`);
+    assert.equal(await count('select * from public.admin_users'),1);
+    await assert.rejects(db.exec(`select public.bootstrap_first_admin('${other}')`), /ADMIN_ALREADY_ASSIGNED/);
+  });
+  await t.test('anonymous cannot write and users cannot elevate privileges', async () => { await as(null); await assert.rejects(db.exec(`insert into public.posts ${post}`)); await as(user); await assert.rejects(db.exec(`insert into public.admin_users values('${user}')`)); await assert.rejects(db.exec(`insert into public.posts ${post}`)); assert.equal(await count('select * from public.admin_users'),0); });
+  await t.test('admin publishes; drafts stay private', async () => { await as(admin); await db.exec(`insert into public.posts ${post}; insert into public.posts(slug,title,summary,body,category) values('draft-post','Чернетка новини','Чернетку ще не опубліковано','Ця чернетка має бути прихована.','Культура');`); await as(null); assert.equal(await count('select * from public.posts'),1); });
+  let messageId = '';
+  await t.test('chat requires auth and inserts are always pending with trusted identity', async () => { await as(null); await assert.rejects(db.query('select * from public.messages')); await as(user); const r = await db.query<{ id:string; status:string; display_name:string }>(`insert into public.messages(user_id,body,status,display_name) values('${user}','Вітаю спільноту!','approved','Підроблена назва') returning *`); messageId = r.rows[0].id; assert.equal(r.rows[0].status,'pending'); assert.equal(r.rows[0].display_name,'Учасник'); await as(other); assert.equal(await count('select * from public.messages'),0); await assert.rejects(db.exec(`insert into public.messages(user_id,body) values('${user}','Підміна автора')`)); });
+  await t.test('only admins moderate and nobody can rewrite message authors', async () => { await as(user); await db.exec(`update public.messages set status='approved' where id='${messageId}'`); assert.equal((await db.query<{status:string}>('select status from public.messages')).rows[0].status,'pending'); await as(admin); await assert.rejects(db.exec(`update public.messages set body='Підмінено' where id='${messageId}'`)); await db.exec(`update public.messages set status='approved' where id='${messageId}'`); await as(other); assert.equal(await count('select * from public.messages'),1); });
+  await t.test('reports are unique and cannot impersonate other users', async () => { await as(other); await db.exec(`insert into public.message_reports(message_id,reason) values('${messageId}','Перевірка скарги')`); await assert.rejects(db.exec(`insert into public.message_reports(message_id,reason) values('${messageId}','Повторна скарга')`)); await assert.rejects(db.exec(`insert into public.message_reports(message_id,reporter_id,reason) values('${messageId}','${user}','Підміна автора')`)); assert.equal(await count('select * from public.message_reports'),0); });
+  await t.test('deleting own message cannot bypass rate limit', async () => { await as(user); await db.exec(`delete from public.messages where id='${messageId}'`); await assert.rejects(db.exec(`insert into public.messages(user_id,body) values('${user}','Занадто швидко')`), /RATE_LIMIT/); });
+  await t.test('bans stop sending and are admin-only', async () => { await as(other); await assert.rejects(db.exec(`insert into public.chat_bans values('${user}','Перевірка',now()+interval '1 day',now())`)); await as(admin); await db.exec(`insert into public.chat_bans(user_id,reason,expires_at) values('${other}','Перевірка',now()+interval '1 day')`); await as(other); await assert.rejects(db.exec(`insert into public.messages(user_id,body) values('${other}','Заблоковане повідомлення')`), /CHAT_BANNED/); });
+  await t.test('storage uploads and audit records are protected', async () => { await as(user); await assert.rejects(db.exec(`insert into storage.objects(bucket_id,name) values('news-images','x.jpg')`)); await assert.rejects(db.exec(`insert into public.audit_log(action,entity) values('FAKE','posts')`)); await as(admin); await db.exec(`insert into storage.objects(bucket_id,name) values('news-images','x.jpg')`); assert.ok(await count('select * from public.audit_log') >= 3); await as(null); assert.equal(await count('select * from storage.objects'),1); });
+  await db.close();
+});

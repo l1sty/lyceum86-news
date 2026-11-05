@@ -1,0 +1,7 @@
+import type { Metadata } from 'next';
+import Image from 'next/image';
+import { BookOpen, FileText, ArrowUpRight } from 'lucide-react';
+import { PageHeading, SourceLink } from '@/components/ui';
+import { school } from '@/lib/content';
+export const metadata: Metadata = { title: 'Про ліцей', alternates: { canonical: '/about' } };
+export default function About() { return <div className="container page-content"><PageHeading title="Наш ліцей" description="Місце зустрічі знань, людей та нових ідей."/><div className="about-grid"><figure className="about-photo"><Image src="/images/facade.jpg" alt="Будівля Одеського ліцею № 86" fill sizes="(max-width: 760px) 100vw, 55vw"/></figure><div className="about-copy"><BookOpen size={32}/><h2>{school.fullName}</h2><p>Заклад освіти в Київському районі Одеси. Цей простір об’єднує новини ліцею, оголошення та спілкування спільноти.</p><dl><div><dt>Адреса</dt><dd>{school.address}</dd></div><div><dt>Директорка</dt><dd>{school.director}</dd></div></dl><SourceLink url="https://osvita-omr.gov.ua/zaklady-osvity/zzso/ye25428302/">Сторінка на сайті департаменту освіти</SourceLink></div></div><section className="documents-section"><div><h2>Інформація з першоджерела</h2><p>Документи, відомості про заклад та актуальні матеріали — на офіційному сайті ліцею.</p></div><a className="document-link" href={`${school.website}/about`} target="_blank" rel="noreferrer"><FileText size={28}/><span>Документи та відомості про заклад<small>Офіційний сайт ліцею</small></span><ArrowUpRight size={22}/></a></section></div>; }

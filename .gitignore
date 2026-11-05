@@ -1,0 +1,32 @@
+node_modules/
+.next/
+.env*
+!.env.example
+*.tsbuildinfo
+coverage/
+out/
+.open-next/
+
+# Hosting, local tooling and operating-system files
+.vercel/
+.wrangler/
+dist/
+build/
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Credentials, private keys and local Supabase state
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+service-account*.json
+supabase/.temp/
+supabase/.branches/
+
+# Local verification artifacts
+admin-verification.png
