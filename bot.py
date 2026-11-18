@@ -93,7 +93,10 @@ def handle(db, update, admin):
             reply("Шкільних новин поки немає. Підпишіться, щоб отримати перше оголошення.")
     elif command == "/id":
         reply(f"Ваш Telegram ID — {chat}")
-    elif command == "/stats" and chat == admin and message.get("from", {}).get("id") == admin:
+    elif command == "/stats":
+        if chat != admin or message.get("from", {}).get("id") != admin:
+            reply("Статистика доступна лише редактору. Щоб дізнатися свій Telegram ID, надішліть /id.")
+            return
         total, day, week, starters = db.execute("""
             SELECT COUNT(*), COUNT(CASE WHEN last_seen >= ? THEN 1 END),
                    COUNT(CASE WHEN last_seen >= ? THEN 1 END),
