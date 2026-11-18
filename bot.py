@@ -120,6 +120,8 @@ def run(db, api, admin):
         except ApiError as error:
             if error.code in (401, 404, 409):
                 raise SystemExit(str(error))
+            if error.code == 429:
+                print(f"Telegram тимчасово обмежив запити. Повтор через {error.delay} с.")
             time.sleep(max(1, error.delay))
         except (URLError, OSError):
             time.sleep(3)
@@ -133,20 +135,47 @@ def main(token=None, admin_text=None, status=print):
         raise SystemExit("Для запуску потрібен токен.")
     def api(method, **params):
         return telegram(token, method, **params)
-    me = api("getMe")
     if admin_text is None:
         admin_text = os.getenv("ADMIN_ID", "").strip()
     if admin_text and not admin_text.isdecimal():
         raise SystemExit("Telegram ID має складатися з цифр.")
     admin = int(admin_text) if admin_text else None
-    api("setMyName", name="86 News")
-    api("setMyDescription", description="Новини школи, оголошення та події. Натисніть «Розпочати», щоб переглянути публікації та підписатися.")
-    api("setMyCommands", commands=[{"command": k, "description": v} for k, v in COMMANDS.items()])
     volume = os.getenv("RAILWAY_VOLUME_MOUNT_PATH")
     if not volume:
         raise SystemExit("Підключіть Volume до сервісу бота в Railway та повторіть запуск.")
+    while True:
+        try:
+            me = api("getMe")
+            break
+        except ApiError as error:
+            if error.code != 429:
+                raise
+            status(f"Telegram обмежив getMe. Повтор через {error.delay} с.")
+            time.sleep(max(1, error.delay))
     with closing(sqlite3.connect(Path(volume) / f"news-{me['id']}.sqlite3")) as db:
         initialize(db)
+        db.execute("CREATE TABLE IF NOT EXISTS profile_setup (method TEXT PRIMARY KEY, retry_at REAL)")
+        settings = {
+            "setMyName": {"name": "86 News"},
+            "setMyDescription": {"description": "Новини школи, оголошення та події. Натисніть «Розпочати», щоб переглянути публікації та підписатися."},
+            "setMyCommands": {"commands": [{"command": k, "description": v} for k, v in COMMANDS.items()]},
+        }
+        for method, params in settings.items():
+            row = db.execute("SELECT retry_at FROM profile_setup WHERE method=?", (method,)).fetchone()
+            if row and (row[0] is None or row[0] > time.time()):
+                continue
+            retry_at = None
+            try:
+                api(method, **params)
+            except ApiError as error:
+                if error.code != 429:
+                    raise
+                status(f"Telegram обмежив {method} на {error.delay} с. Продовжуємо запуск.")
+                retry_at = time.time() + max(1, error.delay)
+            with db:
+                db.execute("INSERT OR REPLACE INTO profile_setup VALUES (?,?)", (method, retry_at))
+            if retry_at is not None:
+                break
         status(f"86 News працює: https://t.me/{me['username']}")
         run(db, api, admin)
 
