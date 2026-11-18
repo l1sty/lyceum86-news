@@ -55,11 +55,21 @@ def initialize(db):
     """)
 
 
-def handle(db, update, admin):
+def parse_admin_ids(value):
+    if not value.strip():
+        return set()
+    ids = [item.strip() for item in value.split(",")]
+    if any(not item.isascii() or not item.isdecimal() or int(item) == 0 for item in ids):
+        raise SystemExit("Введіть числові Telegram ID редакторів через кому.")
+    return {int(item) for item in ids}
+
+
+def handle(db, update, admin_ids):
     message = update.get("message", {})
     if message.get("chat", {}).get("type") != "private":
         return
     chat = message["chat"]["id"]
+    is_editor = chat in admin_ids and message.get("from", {}).get("id") == chat
     text = message.get("text", "").strip()
     parts = text.split(maxsplit=1)
     command = parts[0] if parts else ""
@@ -74,7 +84,7 @@ def handle(db, update, admin):
 
     if command == "/start":
         welcome = "Вітаємо у 86 News! Тут публікуємо шкільні новини. Перегляньте останні оголошення або підпишіться, щоб отримувати нові."
-        if chat == admin:
+        if is_editor:
             welcome += "\n\nСтатистика відвідувань — /stats."
             welcome += "\n\nЩоб опублікувати новину, надішліть /post і текст оголошення одним повідомленням."
         reply(welcome)
@@ -94,7 +104,7 @@ def handle(db, update, admin):
     elif command == "/id":
         reply(f"Ваш Telegram ID — {chat}")
     elif command == "/stats":
-        if chat != admin or message.get("from", {}).get("id") != admin:
+        if not is_editor:
             reply("Статистика доступна лише редактору. Щоб дізнатися свій Telegram ID, надішліть /id.")
             return
         total, day, week, starters = db.execute("""
@@ -110,7 +120,7 @@ def handle(db, update, admin):
               f"Активні за останні 7 днів — {week}\n"
               f"Хоча б раз надіслали /start — {starters}\n"
               f"Зараз підписані — {subscribers}")
-    elif command == "/post" and chat == admin and message.get("from", {}).get("id") == admin:
+    elif command == "/post" and is_editor:
         if len(parts) < 2 or len(parts[1].encode("utf-16-le")) // 2 > 4000:
             reply("Після /post додайте текст оголошення довжиною до 4000 знаків.")
             return
@@ -122,7 +132,7 @@ def handle(db, update, admin):
         reply("Оберіть дію в меню або надішліть /start.")
 
 
-def run(db, api, admin):
+def run(db, api, admin_ids):
     while True:
         try:
             pos = db.execute("SELECT pos FROM cursor_state").fetchone()[0]
@@ -130,7 +140,7 @@ def run(db, api, admin):
             for update in api("getUpdates", offset=pos, timeout=0 if pending else 30,
                               allowed_updates=["message"]):
                 with db:
-                    handle(db, update, admin)
+                    handle(db, update, admin_ids)
                     db.execute("UPDATE cursor_state SET pos=?", (update["update_id"] + 1,))
             for row, chat, body in db.execute("SELECT id,chat,body FROM deliveries ORDER BY id LIMIT 20").fetchall():
                 try:
@@ -162,17 +172,15 @@ def main(token=None, admin_text=None, status=print):
         return telegram(token, method, **params)
     me = api("getMe")
     if admin_text is None:
-        admin_text = os.getenv("ADMIN_ID") or input("Telegram ID редактора (Enter — режим читання): ").strip()
-    if admin_text and not admin_text.isdecimal():
-        raise SystemExit("Telegram ID має складатися з цифр.")
-    admin = int(admin_text) if admin_text else None
+        admin_text = os.getenv("ADMIN_ID") or input("Telegram ID редакторів через кому (Enter — режим читання): ").strip()
+    admin_ids = parse_admin_ids(admin_text)
     api("setMyName", name="86 News")
     api("setMyDescription", description="Новини школи, оголошення та події. Натисніть «Розпочати», щоб переглянути публікації та підписатися.")
     api("setMyCommands", commands=[{"command": k, "description": v} for k, v in COMMANDS.items()])
     with sqlite3.connect(Path(__file__).with_name(f"news-{me['id']}.sqlite3")) as db:
         initialize(db)
         status(f"86 News працює: https://t.me/{me['username']}")
-        run(db, api, admin)
+        run(db, api, admin_ids)
 
 
 if __name__ == "__main__":

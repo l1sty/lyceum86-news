@@ -23,7 +23,7 @@ def launch():
         token.delete(0, "end")
         token.insert(0, value)
     ttk.Button(frame, text="Вставити токен", command=paste).pack(anchor="w")
-    ttk.Label(frame, text="Telegram ID редактора (за бажанням)").pack(anchor="w", pady=(14, 0))
+    ttk.Label(frame, text="Telegram ID редакторів через кому (за бажанням)").pack(anchor="w", pady=(14, 0))
     admin = ttk.Entry(frame)
     admin.pack(fill="x")
     status = tk.StringVar(value="Без ID бот працюватиме в режимі читання.")
@@ -39,9 +39,6 @@ def launch():
         key, editor = token.get().strip(), admin.get().strip()
         if not key or ":" not in key:
             status.set("Вставте повний токен від BotFather.")
-            return
-        if editor and not editor.isdecimal():
-            status.set("ID редактора має містити лише цифри.")
             return
         button.state(["disabled"])
         status.set("Підключення до Telegram…")
