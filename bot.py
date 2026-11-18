@@ -44,6 +44,9 @@ def telegram(token, method, **params):
 def initialize(db):
     db.executescript("""
         CREATE TABLE IF NOT EXISTS subscribers (chat INTEGER PRIMARY KEY);
+        CREATE TABLE IF NOT EXISTS audience (
+            chat INTEGER PRIMARY KEY, last_seen INTEGER NOT NULL, starts INTEGER NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS news (id INTEGER PRIMARY KEY, body TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS deliveries (id INTEGER PRIMARY KEY, chat INTEGER,
             body TEXT, broadcast INTEGER);
@@ -60,12 +63,19 @@ def handle(db, update, admin):
     text = message.get("text", "").strip()
     parts = text.split(maxsplit=1)
     command = parts[0] if parts else ""
+    now = int(time.time())
+    db.execute("""
+        INSERT INTO audience(chat, last_seen, starts) VALUES (?, ?, ?)
+        ON CONFLICT(chat) DO UPDATE SET
+            last_seen = MAX(last_seen, excluded.last_seen), starts = starts + excluded.starts
+    """, (chat, message.get("date", now), int(command == "/start")))
     def reply(body):
         db.execute("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,0)", (chat, body))
 
     if command == "/start":
         welcome = "Вітаємо у 86 News! Тут публікуємо шкільні новини. Перегляньте останні оголошення або підпишіться, щоб отримувати нові."
         if chat == admin:
+            welcome += "\n\nСтатистика відвідувань — /stats."
             welcome += "\n\nЩоб опублікувати новину, надішліть /post і текст оголошення одним повідомленням."
         reply(welcome)
     elif text in (ON, "/subscribe"):
@@ -83,6 +93,20 @@ def handle(db, update, admin):
             reply("Шкільних новин поки немає. Підпишіться, щоб отримати перше оголошення.")
     elif command == "/id":
         reply(f"Ваш Telegram ID — {chat}")
+    elif command == "/stats" and chat == admin and message.get("from", {}).get("id") == admin:
+        total, day, week, starters = db.execute("""
+            SELECT COUNT(*), COUNT(CASE WHEN last_seen >= ? THEN 1 END),
+                   COUNT(CASE WHEN last_seen >= ? THEN 1 END),
+                   COUNT(CASE WHEN starts > 0 THEN 1 END)
+            FROM audience
+        """, (now - 86400, now - 7 * 86400)).fetchone()
+        subscribers = db.execute("SELECT COUNT(*) FROM subscribers").fetchone()[0]
+        reply(f"📊 Статистика 86 News\n\n"
+              f"Усього користувачів від початку обліку — {total}\n"
+              f"Активні за останні 24 години — {day}\n"
+              f"Активні за останні 7 днів — {week}\n"
+              f"Хоча б раз надіслали /start — {starters}\n"
+              f"Зараз підписані — {subscribers}")
     elif command == "/post" and chat == admin and message.get("from", {}).get("id") == admin:
         if len(parts) < 2 or len(parts[1].encode("utf-16-le")) // 2 > 4000:
             reply("Після /post додайте текст оголошення довжиною до 4000 знаків.")
