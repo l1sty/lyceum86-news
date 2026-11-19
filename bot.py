@@ -4,6 +4,7 @@ import os
 import sqlite3
 import time
 import threading
+import secrets
 import requests
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -19,7 +20,9 @@ SIGNED = "Скарга з підписом"
 IDEA = "Пропозиція з підписом"
 CANCEL = "Скасувати"
 EDITOR = "✎ Редакція"
-MENU = {"keyboard": [[NEWS], [ON, OFF], [FEEDBACK]], "resize_keyboard": True}
+TRACK = "Статус звернення"
+POLLS = "Опитування"
+MENU = {"keyboard": [[NEWS, POLLS], [FEEDBACK, TRACK], [ON, OFF]], "resize_keyboard": True}
 COMMANDS = {"start": "Відкрити меню", "news": "Останні новини школи",
             "subscribe": "Підписатися на новини", "unsubscribe": "Скасувати підписку",
             "id": "Дізнатися свій Telegram ID"}
@@ -62,6 +65,10 @@ def initialize(db):
         CREATE TABLE IF NOT EXISTS cursor_state (id INTEGER PRIMARY KEY, pos INTEGER);
         INSERT OR IGNORE INTO cursor_state VALUES (1, 0);
         CREATE TABLE IF NOT EXISTS photos (id INTEGER PRIMARY KEY, data BLOB, file_id TEXT);
+        CREATE TABLE IF NOT EXISTS cases (code TEXT PRIMARY KEY, body TEXT NOT NULL,
+            state TEXT NOT NULL DEFAULT 'Отримано', answer TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 0);
+        CREATE TABLE IF NOT EXISTS polls (id INTEGER PRIMARY KEY, question TEXT NOT NULL, options TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS votes (poll INTEGER, voter INTEGER, choice INTEGER, PRIMARY KEY(poll,voter));
         CREATE TABLE IF NOT EXISTS submissions (editor INTEGER, nonce TEXT, PRIMARY KEY(editor,nonce));
     """)
     for table in ("news", "deliveries"):
@@ -103,6 +110,10 @@ def feedback_keyboard(db, chat):
 
 def handle_feedback(db, chat, text, command, admin_ids, reply):
     row = db.execute("SELECT stage FROM feedback_flow WHERE chat=?", (chat,)).fetchone()
+    if text == TRACK or command == "/status":
+        db.execute("INSERT OR REPLACE INTO feedback_flow VALUES (?, 'lookup')", (chat,))
+        reply("Введіть приватний код звернення.")
+        return True
     if text == FEEDBACK or command == "/feedback":
         if not admin_ids:
             reply("Прийом звернень поки недоступний.")
@@ -112,12 +123,20 @@ def handle_feedback(db, chat, text, command, admin_ids, reply):
         return True
     if not row:
         return False
-    if text == CANCEL or command.startswith("/") or text in (NEWS, ON, OFF):
+    if text == CANCEL or command.startswith("/") or text in (NEWS, ON, OFF, POLLS, EDITOR):
         db.execute("DELETE FROM feedback_flow WHERE chat=?", (chat,))
         if text == CANCEL or command == "/cancel":
             reply("Звернення скасовано.")
             return True
         return False
+    if row[0] == "lookup":
+        case = db.execute("SELECT state,answer FROM cases WHERE code=?", (text.strip().upper(),)).fetchone()
+        if case:
+            db.execute("DELETE FROM feedback_flow WHERE chat=?", (chat,))
+            reply(f"Статус звернення — {case[0]}" + (f"\n\nВідповідь редакції\n{case[1]}" if case[1] else ""))
+        else:
+            reply("Звернення за цим кодом не знайдено. Перевірте код або натисніть «Скасувати».")
+        return True
     if row[0] == "choose":
         if text not in (ANONYMOUS, SIGNED, IDEA):
             reply("Оберіть тип звернення за допомогою кнопок.")
@@ -142,9 +161,11 @@ def handle_feedback(db, chat, text, command, admin_ids, reply):
     if header != ANONYMOUS:
         header += f"\nTelegram ID автора — {chat}"
     body = f"{header}\n\n{text}"
+    code = secrets.token_hex(8).upper()
+    case_id = db.execute("INSERT INTO cases(code,body) VALUES (?,?)", (code, body)).lastrowid
     db.executemany("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,2)",
-                   [(editor, body) for editor in admin_ids])
-    reply("Звернення прийнято для надсилання редакторам.")
+                   [(editor, f"Звернення №{case_id}\n{body}") for editor in admin_ids])
+    reply(f"Звернення прийнято. Ваш приватний код:\n{code}\n\nЗбережіть його для кнопки «Статус звернення». За кодом можна прочитати відповідь.")
     return True
 
 
@@ -180,7 +201,7 @@ def handle(db, update, admin_ids):
         reply("Підписку увімкнено. Нові оголошення надходитимуть сюди.")
     elif text in (OFF, "/unsubscribe"):
         db.execute("DELETE FROM subscribers WHERE chat=?", (chat,))
-        db.execute("DELETE FROM deliveries WHERE chat=? AND broadcast=1", (chat,))
+        db.execute("DELETE FROM deliveries WHERE chat=? AND broadcast IN (1,4)", (chat,))
         reply("Підписку вимкнено. Новини залишаються доступними в меню.")
     elif text in (NEWS, "/news"):
         items = db.execute("SELECT body,photo FROM news ORDER BY id DESC LIMIT 3").fetchall()
@@ -196,6 +217,12 @@ def handle(db, update, admin_ids):
         else:
             db.execute("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,3)",
                        (chat, "Відкрийте редакцію, щоб підготувати новину."))
+    elif command == "/polls" or text == POLLS:
+        polls = db.execute("SELECT id FROM polls ORDER BY id DESC LIMIT 5").fetchall()
+        for poll, in reversed(polls):
+            db.execute("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,4)", (chat, str(poll)))
+        if not polls:
+            reply("Поки немає опитувань.")
     elif command == "/id":
         reply(f"Ваш Telegram ID — {chat}")
     elif command == "/stats":
@@ -226,6 +253,11 @@ def handle(db, update, admin_ids):
 
 
 def deliver(db, api, chat, body, kind, photo, admin_ids):
+    if kind == 4:
+        question, options = db.execute("SELECT question,options FROM polls WHERE id=?", (body,)).fetchone()
+        buttons = [[{"text": option, "callback_data": f"vote:{body}:{i}"}] for i, option in enumerate(json.loads(options))]
+        api("sendMessage", chat_id=chat, text=question, reply_markup={"inline_keyboard": buttons})
+        return
     if kind in (2, 3) and chat not in admin_ids:
         return
     markup = feedback_keyboard(db, chat)
@@ -245,16 +277,40 @@ def deliver(db, api, chat, body, kind, photo, admin_ids):
         db.execute("UPDATE photos SET file_id=?, data=NULL WHERE id=?", (result["photo"][-1]["file_id"], photo))
 
 
+def record_vote(db, callback):
+    parts = callback.get("data", "").split(":")
+    if len(parts) != 3 or parts[0] != "vote" or not all(p.isascii() and p.isdecimal() and len(p) < 19 for p in parts[1:]):
+        return "Невідома дія."
+    poll, choice = map(int, parts[1:])
+    row = db.execute("SELECT options FROM polls WHERE id=?", (poll,)).fetchone()
+    options = json.loads(row[0]) if row else []
+    if choice >= len(options):
+        return "Варіант недоступний."
+    db.execute("INSERT INTO votes VALUES (?,?,?) ON CONFLICT(poll,voter) DO UPDATE SET choice=excluded.choice",
+               (poll, callback["from"]["id"], choice))
+    return "Ваш голос зараховано: " + options[choice]
+
+
 def run(db, api, admin_ids):
     while True:
         try:
             pos = db.execute("SELECT pos FROM cursor_state").fetchone()[0]
             pending = db.execute("SELECT 1 FROM deliveries LIMIT 1").fetchone()
             for update in api("getUpdates", offset=pos, timeout=0 if pending else 30,
-                              allowed_updates=["message"]):
+                              allowed_updates=["message", "callback_query"]):
+                callback = update.get("callback_query")
                 with db:
-                    handle(db, update, admin_ids)
+                    if callback:
+                        notice = record_vote(db, callback)
+                    else:
+                        handle(db, update, admin_ids)
                     db.execute("UPDATE cursor_state SET pos=?", (update["update_id"] + 1,))
+                if callback:
+                    try:
+                        api("answerCallbackQuery", callback_query_id=callback["id"], text=notice)
+                    except ApiError as error:
+                        if error.code != 400:
+                            raise
             for row, chat, body, kind, photo in db.execute("SELECT id,chat,body,broadcast,photo FROM deliveries ORDER BY id LIMIT 20").fetchall():
                 try:
                     deliver(db, api, chat, body, kind, photo, admin_ids)

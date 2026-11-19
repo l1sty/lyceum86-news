@@ -9,7 +9,7 @@ import time
 from urllib.parse import parse_qsl
 from uuid import UUID
 
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, g, jsonify, request, send_file
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 
@@ -50,15 +50,66 @@ def create_panel(database, token, admins, publish):
     app = Flask(__name__, static_folder=None)
     app.config["MAX_CONTENT_LENGTH"] = 9 * 1024 * 1024
 
+    @app.before_request
+    def authorize():
+        if request.path.startswith("/api/"):
+            g.editor = editor_id(request.headers.get("X-Telegram-Init-Data", ""), token, admins)
+            if g.editor is None:
+                return jsonify(error="Відкрийте редакцію через /admin з облікового запису редактора."), 403
+
+    @app.after_request
+    def cache_policy(response):
+        if request.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @app.route("/api/polls", methods=["GET", "POST"])
+    def polls():
+        with closing(sqlite3.connect(database, timeout=15)) as db, db:
+            if request.method == "GET":
+                before = request.args.get("before", 2**63-1, type=int)
+                items = []
+                for pid, question, raw in db.execute("SELECT * FROM polls WHERE id<? ORDER BY id DESC LIMIT 20", (min(before,2**63-1),)):
+                    counts = dict(db.execute("SELECT choice,COUNT(*) FROM votes WHERE poll=? GROUP BY choice", (pid,)))
+                    items.append(dict(id=pid, question=question, options=json.loads(raw), counts=counts))
+                return jsonify(items=items)
+            question = request.form.get("question", "").strip()
+            options = [s.strip() for s in request.form.getlist("option")]
+            if not 1 <= len(question) <= 300 or not 2 <= len(options) <= 10 or any(not 1 <= len(s) <= 80 for s in options) or len({s.casefold() for s in options}) != len(options):
+                return jsonify(error="Введіть запитання та від 2 до 10 різних варіантів (до 80 знаків кожен)."), 400
+            try:
+                nonce = str(UUID(request.form.get("nonce", "")))
+            except ValueError:
+                return jsonify(error="Некоректний запит."), 400
+            if db.execute("INSERT OR IGNORE INTO submissions VALUES (?,?)", (g.editor, nonce)).rowcount:
+                pid = db.execute("INSERT INTO polls(question,options) VALUES (?,?)", (question,json.dumps(options))).lastrowid
+                db.execute("INSERT INTO deliveries(chat,body,broadcast) SELECT chat,?,4 FROM subscribers", (str(pid),))
+        return jsonify(ok=True)
+
+    @app.route("/api/cases", methods=["GET", "POST"])
+    def cases():
+        with closing(sqlite3.connect(database, timeout=15)) as db, db:
+            if request.method == "GET":
+                before = request.args.get("before", 2**63-1, type=int)
+                db.row_factory = sqlite3.Row
+                rows = db.execute("SELECT rowid AS id,body,state,answer,version FROM cases WHERE rowid<? ORDER BY rowid DESC LIMIT 20", (min(before,2**63-1),))
+                return jsonify(items=[dict(row) for row in rows])
+            state = request.form.get("state")
+            answer = request.form.get("answer", "").strip()
+            if state not in ("Отримано","Розглядаємо","Є відповідь") or len(answer)>2000 or (state=="Є відповідь" and not answer):
+                return jsonify(error="Перевірте статус і відповідь (до 2000 знаків)."), 400
+            if not db.execute("UPDATE cases SET state=?,answer=?,version=version+1 WHERE rowid=? AND version=?",
+                              (state,answer,request.form.get("id"),request.form.get("version"))).rowcount:
+                return jsonify(error="Звернення вже змінилося. Оновіть список."), 409
+        return jsonify(ok=True)
+
     @app.get("/")
     def index():
         return send_file(Path(__file__).with_name("editor.html"), max_age=0)
 
     @app.route("/api/editor", methods=["GET", "POST"])
     def editor():
-        uid = editor_id(request.headers.get("X-Telegram-Init-Data", ""), token, admins)
-        if uid is None:
-            return jsonify(error="Відкрийте панель з чату бота через /admin з облікового запису редактора."), 403
+        uid = g.editor
         if request.method == "GET":
             return jsonify(ok=True)
         text = request.form.get("text", "").strip()
