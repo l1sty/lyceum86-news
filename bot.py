@@ -3,6 +3,8 @@ import json
 import os
 import sqlite3
 import time
+import threading
+import requests
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -16,6 +18,7 @@ ANONYMOUS = "Анонімна скарга"
 SIGNED = "Скарга з підписом"
 IDEA = "Пропозиція з підписом"
 CANCEL = "Скасувати"
+EDITOR = "✎ Редакція"
 MENU = {"keyboard": [[NEWS], [ON, OFF], [FEEDBACK]], "resize_keyboard": True}
 COMMANDS = {"start": "Відкрити меню", "news": "Останні новини школи",
             "subscribe": "Підписатися на новини", "unsubscribe": "Скасувати підписку",
@@ -58,7 +61,27 @@ def initialize(db):
             body TEXT, broadcast INTEGER);
         CREATE TABLE IF NOT EXISTS cursor_state (id INTEGER PRIMARY KEY, pos INTEGER);
         INSERT OR IGNORE INTO cursor_state VALUES (1, 0);
+        CREATE TABLE IF NOT EXISTS photos (id INTEGER PRIMARY KEY, data BLOB, file_id TEXT);
+        CREATE TABLE IF NOT EXISTS submissions (editor INTEGER, nonce TEXT, PRIMARY KEY(editor,nonce));
     """)
+    for table in ("news", "deliveries"):
+        if "photo" not in {row[1] for row in db.execute(f"PRAGMA table_info({table})")}:
+            db.execute(f"ALTER TABLE {table} ADD COLUMN photo INTEGER")
+
+
+def publish(db, text, photo=None):
+    photo_id = None
+    if photo:
+        photo_id = db.execute("INSERT INTO photos(data) VALUES (?)", (photo,)).lastrowid
+    body = "📰 86 News\n\n" + text
+    db.execute("INSERT INTO news(body,photo) VALUES (?,?)", (body, photo_id))
+    db.execute("INSERT INTO deliveries(chat,body,broadcast,photo) SELECT chat,?,1,? FROM subscribers",
+               (body, photo_id))
+
+
+def panel_url():
+    domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
+    return os.getenv("MINI_APP_URL") or (f"https://{domain}" if domain else "")
 
 
 def parse_admin_ids(value):
@@ -134,8 +157,8 @@ def handle(db, update, admin_ids):
     text = message.get("text", "").strip()
     parts = text.split(maxsplit=1)
     command = parts[0] if parts else ""
-    def reply(body):
-        db.execute("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,0)", (chat, body))
+    def reply(body, photo=None):
+        db.execute("INSERT INTO deliveries(chat,body,broadcast,photo) VALUES (?,?,0,?)", (chat, body, photo))
 
     if handle_feedback(db, chat, text, command, admin_ids, reply):
         return
@@ -160,11 +183,19 @@ def handle(db, update, admin_ids):
         db.execute("DELETE FROM deliveries WHERE chat=? AND broadcast=1", (chat,))
         reply("Підписку вимкнено. Новини залишаються доступними в меню.")
     elif text in (NEWS, "/news"):
-        items = db.execute("SELECT body FROM news ORDER BY id DESC LIMIT 3").fetchall()
-        for body, in reversed(items):
-            reply(body)
+        items = db.execute("SELECT body,photo FROM news ORDER BY id DESC LIMIT 3").fetchall()
+        for body, photo in reversed(items):
+            reply(body, photo)
         if not items:
             reply("Шкільних новин поки немає. Підпишіться, щоб отримати перше оголошення.")
+    elif command == "/admin" or text == EDITOR:
+        if not is_editor:
+            reply("Панель доступна лише редакторам.")
+        elif not panel_url().startswith("https://"):
+            reply("У Railway підключіть публічний HTTPS-домен до сервісу бота.")
+        else:
+            db.execute("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,3)",
+                       (chat, "Відкрийте редакцію, щоб підготувати новину."))
     elif command == "/id":
         reply(f"Ваш Telegram ID — {chat}")
     elif command == "/stats":
@@ -188,12 +219,30 @@ def handle(db, update, admin_ids):
         if len(parts) < 2 or len(parts[1].encode("utf-16-le")) // 2 > 4000:
             reply("Після /post додайте текст оголошення довжиною до 4000 знаків.")
             return
-        body = "📰 86 News\n\n" + parts[1]
-        db.execute("INSERT INTO news(body) VALUES (?)", (body,))
-        db.execute("INSERT INTO deliveries(chat,body,broadcast) SELECT chat,?,1 FROM subscribers", (body,))
+        publish(db, parts[1])
         reply("Новину опубліковано.")
     else:
         reply("Оберіть дію в меню або надішліть /start.")
+
+
+def deliver(db, api, chat, body, kind, photo, admin_ids):
+    if kind in (2, 3) and chat not in admin_ids:
+        return
+    markup = feedback_keyboard(db, chat)
+    if kind == 3:
+        markup = {"inline_keyboard": [[{"text": "Відкрити редакцію", "web_app": {"url": panel_url()}}]]}
+    elif chat in admin_ids and markup is MENU:
+        markup = dict(MENU, keyboard=MENU["keyboard"] + [[EDITOR]])
+    if photo is None:
+        api("sendMessage", chat_id=chat, text=body, reply_markup=markup)
+        return
+    file_id, = db.execute("SELECT file_id FROM photos WHERE id=?", (photo,)).fetchone()
+    if file_id:
+        api("sendPhoto", chat_id=chat, caption=body, photo=file_id, reply_markup=markup)
+    else:
+        data, = db.execute("SELECT data FROM photos WHERE id=?", (photo,)).fetchone()
+        result = api("sendPhoto", chat_id=chat, caption=body, photo=data, reply_markup=markup)
+        db.execute("UPDATE photos SET file_id=?, data=NULL WHERE id=?", (result["photo"][-1]["file_id"], photo))
 
 
 def run(db, api, admin_ids):
@@ -206,10 +255,9 @@ def run(db, api, admin_ids):
                 with db:
                     handle(db, update, admin_ids)
                     db.execute("UPDATE cursor_state SET pos=?", (update["update_id"] + 1,))
-            for row, chat, body, kind in db.execute("SELECT id,chat,body,broadcast FROM deliveries ORDER BY id LIMIT 20").fetchall():
+            for row, chat, body, kind, photo in db.execute("SELECT id,chat,body,broadcast,photo FROM deliveries ORDER BY id LIMIT 20").fetchall():
                 try:
-                    if kind != 2 or chat in admin_ids:
-                        api("sendMessage", chat_id=chat, text=body, reply_markup=feedback_keyboard(db, chat))
+                    deliver(db, api, chat, body, kind, photo, admin_ids)
                 except ApiError as error:
                     if error.code not in (400, 403):
                         raise
@@ -236,6 +284,17 @@ def main(token=None, admin_text=None, status=print):
     if not token:
         raise SystemExit("Для запуску потрібен токен.")
     def api(method, **params):
+        if isinstance(params.get("photo"), bytes):
+            files = {"photo": ("news.jpg", params.pop("photo"), "image/jpeg")}
+            params["reply_markup"] = json.dumps(params["reply_markup"])
+            try:
+                response = requests.post(f"https://api.telegram.org/bot{token}/sendPhoto", data=params, files=files, timeout=50)
+                result = response.json()
+            except requests.RequestException:
+                raise OSError("Помилка зв’язку з Telegram") from None
+            if not result.get("ok"):
+                raise ApiError(result)
+            return result["result"]
         return telegram(token, method, **params)
     if admin_text is None:
         admin_text = os.getenv("ADMIN_ID", "").strip()
@@ -252,8 +311,14 @@ def main(token=None, admin_text=None, status=print):
                 raise
             status(f"Telegram обмежив getMe. Повтор через {error.delay} с.")
             time.sleep(max(1, error.delay))
-    with closing(sqlite3.connect(Path(volume) / f"news-{me['id']}.sqlite3")) as db:
+    database = Path(volume) / f"news-{me['id']}.sqlite3"
+    with closing(sqlite3.connect(database)) as db:
         initialize(db)
+        from panel import create_panel
+        from waitress import create_server
+        server = create_server(create_panel(database, token, admin_ids, publish), host="0.0.0.0",
+                               port=int(os.getenv("PORT", "8080")), max_request_body_size=9*1024*1024)
+        threading.Thread(target=server.run, daemon=True).start()
         db.execute("CREATE TABLE IF NOT EXISTS profile_setup (method TEXT PRIMARY KEY, retry_at REAL)")
         settings = {
             "setMyName": {"name": "86 News"},
