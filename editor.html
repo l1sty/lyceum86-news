@@ -6,26 +6,53 @@
 <title>Редакція · 86 News</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-:root{color-scheme:dark;--page:#181b1b;--surface:#212525;--line:#424848;--ink:#f1efe6;--muted:#b6bdb6;--accent:#b5e0b1}
-*{box-sizing:border-box}body{margin:0;background:var(--page);color:var(--ink);font:16px/1.5 "Segoe UI",system-ui,sans-serif}
-main{max-width:1320px;margin:auto;padding:24px clamp(16px,4vw,56px) max(48px,env(safe-area-inset-bottom))}
-header,.row,nav{display:flex;align-items:center;justify-content:space-between;gap:12px}
-header{border-bottom:3px double var(--muted);padding:0 0 16px}.brand,h1,h2{font-family:Georgia,"Times New Roman",serif;font-weight:400}.brand{font-size:clamp(36px,6vw,64px);line-height:1;letter-spacing:-2px}.brand b{color:var(--accent);font-weight:500}header small{text-align:right}
-nav{justify-content:flex-start;gap:4px;border-bottom:1px solid var(--line);padding:8px 0}button,.attach{min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:8px 16px;font:inherit;cursor:pointer;transition:background-color .16s,border-color .16s}
-nav button{flex:1;padding:8px 4px;color:var(--muted);border:0;border-radius:4px;background:transparent}nav button[aria-current=true]{color:var(--accent);background:#29312b}
-button:hover,.attach:hover{border-color:var(--muted)}nav button:hover{background:var(--surface)}button:disabled{opacity:.52;cursor:default}
-h1{font-size:clamp(32px,5vw,52px);line-height:1.08;letter-spacing:-1px;margin:24px 0}h2{font-size:28px;line-height:1.2;margin:32px 0 16px}h3{font-size:18px;font-weight:500;margin:4px 0 12px}
-label{display:block;font-weight:500}small,.meta{color:var(--muted);font-variant-numeric:tabular-nums;font-size:14px}
-textarea,input:not([type=file]),select{display:block;margin:8px 0 16px;width:100%;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:inherit;padding:12px;font:inherit}
-textarea{resize:vertical;min-height:104px}#body{min-height:180px}textarea::placeholder,input::placeholder{color:#a4aaa5}
-fieldset{border:0;margin:0;padding:0;min-width:0}.photo{margin:16px 0 4px}.attach{position:relative;display:inline-flex;align-items:center;overflow:hidden}.attach input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
-.primary{width:100%;margin-top:20px;background:var(--accent);color:#152318;border-color:transparent;font-weight:600}.primary:hover{background:#cbebc7}
+:root{color-scheme:dark;--page:#151818;--surface:#202424;--field:#181c1c;--line:#414949;--ink:#f4f4eb;--muted:#bcc5bf;--accent:#b6e6b0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font:16px/1.5 "Segoe UI",system-ui,sans-serif}
+main{max-width:1360px;margin:auto;padding:24px max(16px,env(safe-area-inset-left)) max(48px,env(safe-area-inset-bottom))}
+header,.row,.sectionbar,.actions{display:flex;align-items:center;justify-content:space-between;gap:12px}
+header{padding-bottom:20px;border-bottom:1px solid var(--line)}header small{text-align:right}
+.brand,h1,h2{font-family:Georgia,serif;font-weight:400}.brand{font-size:clamp(36px,5vw,56px);line-height:1;letter-spacing:-2px}.brand b{font-weight:500;color:var(--accent)}
+nav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:16px 0;padding:4px;border:1px solid var(--line);background:var(--field);border-radius:12px}
+button,.attach{display:inline-flex;justify-content:center;align-items:center;min-height:44px;box-sizing:border-box;padding:8px 16px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:500 15px/1.35 "Segoe UI",system-ui,sans-serif;cursor:pointer;text-align:center;transition:border-color .16s,background-color .16s}
+button:hover,.attach:hover{border-color:var(--muted)}button:disabled{cursor:default;color:#bac6bb;background:#343d36;border-color:#414b43}
+nav button{border:0;background:transparent;color:var(--muted);padding:8px 4px;min-width:0}
+nav button[aria-current=true]{background:#303a33;color:var(--accent)}
+nav button:hover:not([aria-current=true]){background:var(--surface)}
+h1{font-size:clamp(32px,4.2vw,48px);line-height:1.12;letter-spacing:-1px;margin:24px 0 20px}
+h2{font-size:26px;line-height:1.15;margin:0}h3{font-size:18px;font-weight:550;margin:4px 0 8px}
+small,.meta{color:var(--muted);font-size:14px;font-variant-numeric:tabular-nums}
+.workarea,.pollgrid>*{min-width:0;overflow-wrap:anywhere}
+fieldset{border:0;min-width:0;margin:0}
+#composer,#confirmation,#pollform,.results,details{padding:clamp(16px,2vw,24px);background:var(--surface);border:1px solid var(--line);border-radius:12px}
+label{display:block;font-weight:500}
+textarea,input:not([type=file]),select{display:block;width:100%;margin:8px 0 16px;padding:12px;border:1px solid #606b68;border-radius:8px;background:var(--field);color:var(--ink);font:inherit}
+textarea{min-height:112px;resize:vertical}#body{min-height:168px}textarea::placeholder,input::placeholder{color:#b4beb7}
 :focus-visible,.attach:focus-within{outline:2px solid var(--accent);outline-offset:3px}
-figure{margin:16px 0}img{max-width:100%;max-height:320px;border-radius:8px;display:block}p.copy,.casebody{white-space:pre-wrap;overflow-wrap:anywhere}
-#preview,.item{padding:16px 0;border-top:1px solid var(--line)}#preview strong{font:24px Georgia,serif}#status,.notice{color:var(--accent);margin:12px 0}.notice:empty{display:none}
-meter{width:100%;height:12px;accent-color:var(--accent)}meter::-webkit-meter-optimum-value{background:var(--accent)}meter::-webkit-meter-bar{background:#333938;border:0}
-details{border-top:1px solid var(--line);padding:12px 0}summary{cursor:pointer;overflow-wrap:anywhere}.item,.workarea{min-width:0;overflow-wrap:anywhere}
-[hidden]{display:none!important}@media(min-width:800px){.desk{display:grid;grid-template-columns:220px minmax(0,1fr);gap:48px}nav{display:flex;flex-direction:column;align-self:start;align-items:stretch;border:0;padding-top:32px}nav button{text-align:left;padding:12px 16px}.workarea{padding:8px 0 24px 32px;border-left:1px solid var(--line);max-width:920px}.pollgrid{display:grid;grid-template-columns:1fr 1fr;gap:32px}.pollgrid h2{margin-top:0}}
+.attach{position:relative;overflow:hidden}.attach input{position:absolute;inset:0;width:100%;opacity:0;cursor:pointer}
+.photo{justify-content:flex-start;margin:0 0 8px;flex-wrap:wrap}
+.primary{width:100%;margin-top:20px;color:#122017;background:var(--accent);border-color:transparent;font-weight:600}
+.primary:hover:enabled{background:#cdf0c8}
+.actions{margin-top:20px;display:grid;grid-template-columns:1fr}.actions button{width:100%;height:100%;margin:0}
+.sectionbar{margin:0 0 16px}.sectionbar button{flex:none}.sectionbar h1{margin-bottom:12px}
+.pollgrid{display:grid;gap:16px;align-items:start}
+.item{padding:16px 0;border-top:1px solid var(--line)}.item:last-child{padding-bottom:0}.item .row{margin-top:8px}.item .row .meta{flex:none}
+meter{display:block;width:100%;height:12px;accent-color:var(--accent)}meter::-webkit-meter-optimum-value{background:var(--accent)}meter::-webkit-meter-bar{background:#444d49;border:0}
+details+details{margin-top:8px}summary{cursor:pointer;min-height:44px;align-content:center}summary:focus-visible{outline-offset:4px}
+#status,.notice{color:var(--accent);margin:12px 0}.notice:empty,#status:empty{display:none}
+p.copy,.casebody{white-space:pre-wrap;overflow-wrap:anywhere}figure{margin:16px 0}img{max-width:100%;max-height:320px;border-radius:8px;display:block}#preview strong{font:24px Georgia,serif}
+[hidden]{display:none!important}
+@media(min-width:540px){.actions{grid-template-columns:1fr 1.4fr}}
+@media(min-width:800px){
+ main{padding:32px clamp(24px,4vw,56px) 48px}
+ .desk{display:grid;grid-template-columns:196px minmax(0,1fr);gap:32px}
+ nav{align-self:start;grid-template-columns:1fr;margin:24px 0;border:0;border-radius:0;background:transparent;padding:0}
+ nav button{justify-content:flex-start;padding:12px 16px}
+ .workarea{padding:0 0 32px 32px;border-left:1px solid var(--line)}
+}
+@media(min-width:980px){.pollgrid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+@media(max-width:360px){nav button{font-size:14px}}
+@media(prefers-reduced-motion:reduce){button,.attach{transition:none}}
 </style>
 <main>
 <header><span class="brand"><b>86</b> News</span><small>Редакція ліцею<br><time id="date"></time></small></header>
@@ -36,12 +63,12 @@ details{border-top:1px solid var(--line);padding:12px 0}summary{cursor:pointer;o
 <div class="row"><label for="body">Текст новини</label><small id="count">0 / 4000</small></div>
 <textarea id="body" placeholder="Що відбувається у школі?"></textarea>
 <div class="row photo"><label class="attach"><span id="fileLabel">Додати фото</span><input id="file" type="file" accept="image/jpeg,image/png,image/webp" aria-label="Обрати фото"></label><button id="remove" type="button" hidden>Прибрати</button></div>
-<figure id="thumbWrap" hidden><img id="thumb" alt="Обране фото"></figure>
+<figure id="thumbWrap" hidden></figure>
 <small>JPG, PNG або WebP · до 8 МБ</small>
 <button class="primary" id="review" disabled>Переглянути допис</button>
 </fieldset>
-<section id="confirmation" hidden><article id="preview"><strong>86 News</strong><figure id="previewWrap" hidden><img id="previewImg" alt="Фото до публікації"></figure><p id="previewText" class="copy"></p></article>
-<button id="edit">До редагування</button><button id="publish" class="primary">Опублікувати для підписників</button></section>
+<section id="confirmation" hidden><article id="preview"><strong>86 News</strong><figure id="previewWrap" hidden></figure><p id="previewText" class="copy"></p></article>
+<div class="actions"><button id="edit">До редагування</button><button id="publish" class="primary">Опублікувати для підписників</button></div></section>
 <p id="status" role="status" aria-live="polite">Перевіряємо доступ…</p>
 <button id="next" hidden>Створити ще одну новину</button>
 </section>
@@ -49,8 +76,8 @@ details{border-top:1px solid var(--line);padding:12px 0}summary{cursor:pointer;o
 <form id="pollform"><label>Запитання<input name="question" maxlength="300" required placeholder="Що запитаємо в учнів?"></label>
 <label>Варіанти відповіді<textarea id="choices" required placeholder="Кожен варіант з нового рядка"></textarea></label><small>Від 2 до 10 варіантів</small>
 <button class="primary">Опублікувати опитування</button><p id="pollmsg" role="status" class="notice"></p></form>
-<div><h2>Результати</h2><button data-refresh="polls">Оновити</button><div id="pollsList"></div><button id="pollsMore" hidden>Показати ще</button></div></div></section>
-<section id="caseview" hidden><h1>Звернення</h1><button data-refresh="cases">Оновити список</button><div id="casesList"></div><button id="casesMore" hidden>Показати ще</button></section>
+<div class="results"><div class="sectionbar"><h2>Результати</h2><button data-refresh="polls">Оновити</button></div><div id="pollsList"></div><p id="pollsError" class="notice" role="status"></p><button id="pollsMore" hidden>Показати ще</button></div></div></section>
+<section id="caseview" hidden><div class="sectionbar"><h1>Звернення</h1><button data-refresh="cases">Оновити список</button></div><div id="casesList"></div><p id="casesError" class="notice" role="status"></p><button id="casesMore" hidden>Показати ще</button></section>
 </div></div>
 </main>
 <script>
@@ -66,6 +93,16 @@ function update() {
   el('review').disabled = !size || size > limit;
   nonce = crypto.randomUUID();
 }
+function setPhoto(figure, source, alt) {
+  figure.replaceChildren();
+  if (source) {
+    const image = new Image();
+    image.alt = alt;
+    image.src = source;
+    figure.append(image);
+  }
+  figure.hidden = !source;
+}
 function picture() {
   const file = el('file').files[0];
   if (url) URL.revokeObjectURL(url);
@@ -77,7 +114,7 @@ function picture() {
   url = selected ? URL.createObjectURL(selected) : '';
   el('thumbWrap').hidden = el('remove').hidden = !url;
   el('fileLabel').textContent = url ? 'Замінити фото' : 'Додати фото';
-  if (url) el('thumb').src = url;
+  setPhoto(el('thumbWrap'), url, 'Обране фото');
   update();
 }
 el('body').oninput = update;
@@ -93,7 +130,7 @@ function showPreview(show) {
 el('review').onclick = () => {
   el('previewText').textContent = el('body').value.trim();
   el('previewWrap').hidden = !url;
-  if (url) el('previewImg').src = url;
+  setPhoto(el('previewWrap'), url, 'Фото до публікації');
   showPreview(true);
 };
 el('edit').onclick = () => showPreview(false);
@@ -130,12 +167,14 @@ call().then(() => {document.querySelectorAll('nav button').forEach(b=>b.disabled
 el('date').textContent = new Intl.DateTimeFormat('uk-UA',{day:'numeric',month:'long',timeZone:'Europe/Kyiv'}).format(new Date());
 const tabs = Array.from(document.querySelectorAll('nav button'));
 for (const tab of tabs) tab.onclick = () => {
+  if (tab.getAttribute('aria-current') === 'true') return;
   for (const other of tabs) {
     const active = other === tab;
     el(other.dataset.view).hidden = !active;
     other.setAttribute('aria-current',String(active));
   }
-  if (tab.dataset.view !== 'postview') loadList(tab.dataset.view === 'pollview' ? 'polls' : 'cases');
+  if (tab.dataset.view === 'pollview') loadList('polls');
+  if (tab.dataset.view === 'caseview' && !pages.cases) loadList('cases');
 };
 function node(name, text, parent, klass) {
   const child = document.createElement(name);
@@ -169,52 +208,69 @@ function renderCase(item, parent) {
   answer.value=item.answer; answer.maxLength=2000;
   const save=node('button','Зберегти',form,'primary');
   const notice=node('p','',form,'notice'); notice.setAttribute('role','status');
+  form.oninput=()=>{form.dataset.dirty='true'; notice.textContent='Є незбережені зміни';};
   form.onsubmit=async ev=>{
-    ev.preventDefault(); save.disabled=true;
+    ev.preventDefault(); save.disabled=select.disabled=answer.disabled=true;
     const data=new FormData();
     data.set('id',item.id); data.set('version',item.version);
     data.set('state',select.value); data.set('answer',answer.value.trim());
     try {
       await call({method:'POST',body:data},'/api/cases');
       item.version++; summary.textContent='№ '+item.id+' · '+item.body.split('\n')[0]+' — '+data.get('state');
+      delete form.dataset.dirty;
       notice.textContent='Зміни збережено';
     } catch(e){notice.textContent=e.message;}
-    finally{save.disabled=false;}
+    finally{save.disabled=select.disabled=answer.disabled=false;}
   };
 }
 const pages={};
 async function loadList(kind, before) {
   const list=el(kind+'List'), more=el(kind+'More');
+  const error=el(kind+'Error'), refresh=document.querySelector('[data-refresh="'+kind+'"]');
+  error.textContent='';
   const generation=Symbol();
   pages[kind]=generation;
-  more.hidden=true;
-  if (!before) list.textContent='Завантаження…';
+  refresh.disabled=more.disabled=true;
+  list.setAttribute('aria-busy','true');
   try {
     const result=await call({},'/api/'+kind+(before?'?before='+before:''));
     if (pages[kind]!==generation) return;
     if (!before) list.replaceChildren();
+    more.hidden=true;
     const draw=kind==='polls'?renderPoll:renderCase;
     result.items.forEach(item=>draw(item,list));
     if (!before && !result.items.length) node('p',kind==='polls'?'Опитувань поки немає':'Звернень поки немає',list,'meta');
     if (result.items.length===20) {more.hidden=false;more.onclick=()=>loadList(kind,result.items.at(-1).id);}
-  } catch(e){if(pages[kind]===generation) list.textContent=e.message;}
+  } catch(e){if(pages[kind]===generation) error.textContent=e.message;}
+  finally{
+    if(pages[kind]===generation){
+      refresh.disabled=more.disabled=false;
+      list.setAttribute('aria-busy','false');
+    }
+  }
 }
-document.querySelectorAll('[data-refresh]').forEach(b=>b.onclick=()=>loadList(b.dataset.refresh));
+document.querySelectorAll('[data-refresh]').forEach(b=>b.onclick=()=>{
+  if (b.dataset.refresh==='cases' && el('casesList').querySelector('[data-dirty]') &&
+      !window.confirm('Оновити список і відкинути незбережені зміни?')) return;
+  loadList(b.dataset.refresh);
+});
 let pollNonce=crypto.randomUUID();
 el('pollform').oninput=()=>{pollNonce=crypto.randomUUID();};
 el('pollform').onsubmit=async ev=>{
   ev.preventDefault();
-  const form=ev.currentTarget, send=form.querySelector('button'), data=new FormData(form);
+  const form=ev.currentTarget, data=new FormData(form);
   const options=el('choices').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
   options.forEach(s=>data.append('option',s));
-  data.set('nonce',pollNonce); send.disabled=true;
+  data.set('nonce',pollNonce);
+  const controls = [...form.querySelectorAll('input,textarea,button')];
+  controls.forEach(control=>control.disabled=true);
   try {
     await call({method:'POST',body:data},'/api/polls');
     form.reset();pollNonce=crypto.randomUUID();
     el('pollmsg').textContent='Опитування опубліковано';
     await loadList('polls');
   } catch(e){el('pollmsg').textContent=e.message;}
-  finally{send.disabled=false;}
+  finally{controls.forEach(control=>control.disabled=false);}
 };
 
 </script>
