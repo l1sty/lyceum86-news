@@ -6,9 +6,9 @@
 <title>Редакція · 86 News</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-:root{color-scheme:dark;--page:#151818;--surface:#202424;--field:#181c1c;--line:#414949;--ink:#f4f4eb;--muted:#bcc5bf;--accent:#b6e6b0}
+:root{color-scheme:dark;color:#f4f4eb;background-color:#151818;--surface:#202424;--field:#181c1c;--line:#414949;--ink:#f4f4eb;--muted:#bcc5bf;--accent:#b6e6b0}
 *{box-sizing:border-box}
-body{margin:0;background:var(--page);color:var(--ink);font:16px/1.5 "Segoe UI",system-ui,sans-serif}
+body{margin:0;background-color:#151818;color:#f4f4eb;font:16px/1.5 "Segoe UI",system-ui,sans-serif}
 main{max-width:1360px;margin:auto;padding:24px max(16px,env(safe-area-inset-left)) max(48px,env(safe-area-inset-bottom))}
 header,.row,.sectionbar,.actions{display:flex;align-items:center;justify-content:space-between;gap:12px}
 header{padding-bottom:20px;border-bottom:1px solid var(--line)}header small{text-align:right}
@@ -31,7 +31,7 @@ textarea{min-height:112px;resize:vertical}#body{min-height:168px}textarea::place
 :focus-visible,.attach:focus-within{outline:2px solid var(--accent);outline-offset:3px}
 .attach{position:relative;overflow:hidden}.attach input{position:absolute;inset:0;width:100%;opacity:0;cursor:pointer}
 .photo{justify-content:flex-start;margin:0 0 8px;flex-wrap:wrap}
-.primary{width:100%;margin-top:20px;color:#122017;background:var(--accent);border-color:transparent;font-weight:600}
+.primary{width:100%;margin-top:20px;color:#122017;background-color:#b6e6b0;border-color:transparent;font-weight:600}
 .primary:hover:enabled{background:#cdf0c8}
 .actions{margin-top:20px;display:grid;grid-template-columns:1fr}.actions button{width:100%;height:100%;margin:0}
 .sectionbar{margin:0 0 16px}.sectionbar button{flex:none}.sectionbar h1{margin-bottom:12px}
@@ -211,6 +211,7 @@ function renderCase(item, parent) {
   form.oninput=()=>{form.dataset.dirty='true'; notice.textContent='Є незбережені зміни';};
   form.onsubmit=async ev=>{
     ev.preventDefault(); save.disabled=select.disabled=answer.disabled=true;
+    form.dataset.saving='true';
     const data=new FormData();
     data.set('id',item.id); data.set('version',item.version);
     data.set('state',select.value); data.set('answer',answer.value.trim());
@@ -220,18 +221,23 @@ function renderCase(item, parent) {
       delete form.dataset.dirty;
       notice.textContent='Зміни збережено';
     } catch(e){notice.textContent=e.message;}
-    finally{save.disabled=select.disabled=answer.disabled=false;}
+    finally{delete form.dataset.saving;save.disabled=select.disabled=answer.disabled=false;}
   };
 }
 const pages={};
 async function loadList(kind, before) {
   const list=el(kind+'List'), more=el(kind+'More');
   const error=el(kind+'Error'), refresh=document.querySelector('[data-refresh="'+kind+'"]');
+  if (!before && list.querySelector('[data-saving]')) {
+    error.textContent='Дочекайтеся завершення збереження.';
+    return;
+  }
   error.textContent='';
   const generation=Symbol();
   pages[kind]=generation;
   refresh.disabled=more.disabled=true;
   list.setAttribute('aria-busy','true');
+  if (!before) list.inert=true;
   try {
     const result=await call({},'/api/'+kind+(before?'?before='+before:''));
     if (pages[kind]!==generation) return;
@@ -240,12 +246,13 @@ async function loadList(kind, before) {
     const draw=kind==='polls'?renderPoll:renderCase;
     result.items.forEach(item=>draw(item,list));
     if (!before && !result.items.length) node('p',kind==='polls'?'Опитувань поки немає':'Звернень поки немає',list,'meta');
-    if (result.items.length===20) {more.hidden=false;more.onclick=()=>loadList(kind,result.items.at(-1).id);}
+    if (result.has_more) {more.hidden=false;more.onclick=()=>loadList(kind,result.items.at(-1).id);}
   } catch(e){if(pages[kind]===generation) error.textContent=e.message;}
   finally{
     if(pages[kind]===generation){
       refresh.disabled=more.disabled=false;
       list.setAttribute('aria-busy','false');
+      list.inert=false;
     }
   }
 }

@@ -1,5 +1,6 @@
 import getpass
 import json
+from http.client import IncompleteRead
 import os
 import sqlite3
 import time
@@ -29,21 +30,45 @@ class ApiError(Exception):
         super().__init__(data.get("description", "Помилка Telegram"))
 
 
+def telegram_result(data, http_status=200):
+    if isinstance(data, dict):
+        if data.get("ok") is True and "result" in data:
+            return data["result"]
+        if isinstance(data.get("error_code"), int):
+            raise ApiError(data)
+    if http_status >= 400:
+        raise ApiError({"error_code": http_status})
+    raise OSError("Telegram повернув неповну відповідь.")
+
+
 def telegram(token, method, **params):
     request = Request(f"https://api.telegram.org/bot{token}/{method}",
                       data=json.dumps(params).encode(),
                       headers={"Content-Type": "application/json"})
     try:
         with urlopen(request, timeout=50) as response:
-            data = json.load(response)
+            return telegram_result(json.load(response))
     except HTTPError as error:
         try:
-            data = json.loads(error.read())
-        except ValueError:
+            return telegram_result(json.loads(error.read()), error.code)
+        except (ValueError, IncompleteRead):
             raise ApiError({"error_code": error.code}) from None
-    if not data.get("ok"):
-        raise ApiError(data)
-    return data["result"]
+    except (ValueError, IncompleteRead):
+        raise OSError("Telegram повернув неповну відповідь.") from None
+
+
+def get_identity(api, status):
+    while True:
+        try:
+            return api("getMe")
+        except ApiError as error:
+            if error.code != 429 and error.code < 500:
+                raise
+            delay = max(1, error.delay)
+        except OSError:
+            delay = 3
+        status(f"Очікуємо на Telegram. Наступна спроба через {delay} с.")
+        time.sleep(delay)
 
 
 def initialize(db):
@@ -235,13 +260,20 @@ def main(token=None, admin_text=None, status=print):
         raise SystemExit("Для запуску потрібен токен.")
     def api(method, **params):
         return telegram(token, method, **params)
-    me = api("getMe")
     if admin_text is None:
         admin_text = os.getenv("ADMIN_ID") or input("Telegram ID редакторів через кому (Enter — режим читання): ").strip()
     admin_ids = parse_admin_ids(admin_text)
-    api("setMyName", name="86 News")
-    api("setMyDescription", description="Новини школи, оголошення та події. Натисніть «Розпочати», щоб переглянути публікації та підписатися.")
-    api("setMyCommands", commands=[{"command": k, "description": v} for k, v in COMMANDS.items()])
+    me = get_identity(api, status)
+    try:
+        api("setMyName", name="86 News")
+        api("setMyDescription", description="Новини школи, оголошення та події. Натисніть «Розпочати», щоб переглянути публікації та підписатися.")
+        api("setMyCommands", commands=[{"command": k, "description": v} for k, v in COMMANDS.items()])
+    except ApiError as error:
+        if error.code in (401, 404):
+            raise
+        status(f"Оформлення профілю відкладено (Telegram {error.code}).")
+    except OSError:
+        status("Оформлення профілю відкладено до наступного запуску.")
     with sqlite3.connect(Path(__file__).with_name(f"news-{me['id']}.sqlite3")) as db:
         initialize(db)
         status(f"86 News працює: https://t.me/{me['username']}")

@@ -50,6 +50,11 @@ def create_panel(database, token, admins, publish):
     app = Flask(__name__, static_folder=None)
     app.config["MAX_CONTENT_LENGTH"] = 9 * 1024 * 1024
 
+    def page_cursor():
+        last_id = 2**63 - 1
+        before = request.args.get("before", last_id, type=int)
+        return max(0, min(before, last_id))
+
     @app.before_request
     def authorize():
         if request.path.startswith("/api/"):
@@ -67,12 +72,12 @@ def create_panel(database, token, admins, publish):
     def polls():
         with closing(sqlite3.connect(database, timeout=15)) as db, db:
             if request.method == "GET":
-                before = request.args.get("before", 2**63-1, type=int)
                 items = []
-                for pid, question, raw in db.execute("SELECT * FROM polls WHERE id<? ORDER BY id DESC LIMIT 20", (min(before,2**63-1),)):
+                rows = db.execute("SELECT id,question,options FROM polls WHERE id<? ORDER BY id DESC LIMIT 21", (page_cursor(),)).fetchall()
+                for pid, question, raw in rows[:20]:
                     counts = dict(db.execute("SELECT choice,COUNT(*) FROM votes WHERE poll=? GROUP BY choice", (pid,)))
                     items.append(dict(id=pid, question=question, options=json.loads(raw), counts=counts))
-                return jsonify(items=items)
+                return jsonify(items=items, has_more=len(rows)>20)
             question = request.form.get("question", "").strip()
             options = [s.strip() for s in request.form.getlist("option")]
             if not 1 <= len(question) <= 300 or not 2 <= len(options) <= 10 or any(not 1 <= len(s) <= 80 for s in options) or len({s.casefold() for s in options}) != len(options):
@@ -90,10 +95,9 @@ def create_panel(database, token, admins, publish):
     def cases():
         with closing(sqlite3.connect(database, timeout=15)) as db, db:
             if request.method == "GET":
-                before = request.args.get("before", 2**63-1, type=int)
                 db.row_factory = sqlite3.Row
-                rows = db.execute("SELECT rowid AS id,body,state,answer,version FROM cases WHERE rowid<? ORDER BY rowid DESC LIMIT 20", (min(before,2**63-1),))
-                return jsonify(items=[dict(row) for row in rows])
+                rows = db.execute("SELECT rowid AS id,body,state,answer,version FROM cases WHERE rowid<? ORDER BY rowid DESC LIMIT 21", (page_cursor(),)).fetchall()
+                return jsonify(items=[dict(row) for row in rows[:20]], has_more=len(rows)>20)
             state = request.form.get("state")
             answer = request.form.get("answer", "").strip()
             if state not in ("Отримано","Розглядаємо","Є відповідь") or len(answer)>2000 or (state=="Є відповідь" and not answer):

@@ -1,5 +1,6 @@
 from contextlib import closing
 import json
+from http.client import IncompleteRead
 import os
 import sqlite3
 import time
@@ -22,6 +23,8 @@ CANCEL = "Скасувати"
 EDITOR = "✎ Редакція"
 TRACK = "Статус звернення"
 POLLS = "Опитування"
+POLL_BROADCAST = 4
+POLL_REQUEST = 5
 MENU = {"keyboard": [[NEWS, POLLS], [FEEDBACK, TRACK], [ON, OFF]], "resize_keyboard": True}
 COMMANDS = {"start": "Відкрити меню", "news": "Останні новини школи",
             "subscribe": "Підписатися на новини", "unsubscribe": "Скасувати підписку",
@@ -35,21 +38,45 @@ class ApiError(Exception):
         super().__init__(data.get("description", "Помилка Telegram"))
 
 
+def telegram_result(data, http_status=200):
+    if isinstance(data, dict):
+        if data.get("ok") is True and "result" in data:
+            return data["result"]
+        if isinstance(data.get("error_code"), int):
+            raise ApiError(data)
+    if http_status >= 400:
+        raise ApiError({"error_code": http_status})
+    raise OSError("Telegram повернув неповну відповідь.")
+
+
 def telegram(token, method, **params):
     request = Request(f"https://api.telegram.org/bot{token}/{method}",
                       data=json.dumps(params).encode(),
                       headers={"Content-Type": "application/json"})
     try:
         with urlopen(request, timeout=50) as response:
-            data = json.load(response)
+            return telegram_result(json.load(response))
     except HTTPError as error:
         try:
-            data = json.loads(error.read())
-        except ValueError:
+            return telegram_result(json.loads(error.read()), error.code)
+        except (ValueError, IncompleteRead):
             raise ApiError({"error_code": error.code}) from None
-    if not data.get("ok"):
-        raise ApiError(data)
-    return data["result"]
+    except (ValueError, IncompleteRead):
+        raise OSError("Telegram повернув неповну відповідь.") from None
+
+
+def get_identity(api, status):
+    while True:
+        try:
+            return api("getMe")
+        except ApiError as error:
+            if error.code != 429 and error.code < 500:
+                raise
+            delay = max(1, error.delay)
+        except OSError:
+            delay = 3
+        status(f"Очікуємо на Telegram. Наступна спроба через {delay} с.")
+        time.sleep(delay)
 
 
 def initialize(db):
@@ -220,7 +247,7 @@ def handle(db, update, admin_ids):
     elif command == "/polls" or text == POLLS:
         polls = db.execute("SELECT id FROM polls ORDER BY id DESC LIMIT 5").fetchall()
         for poll, in reversed(polls):
-            db.execute("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,4)", (chat, str(poll)))
+            db.execute("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,?)", (chat, str(poll), POLL_REQUEST))
         if not polls:
             reply("Поки немає опитувань.")
     elif command == "/id":
@@ -253,7 +280,7 @@ def handle(db, update, admin_ids):
 
 
 def deliver(db, api, chat, body, kind, photo, admin_ids):
-    if kind == 4:
+    if kind in (POLL_BROADCAST, POLL_REQUEST):
         question, options = db.execute("SELECT question,options FROM polls WHERE id=?", (body,)).fetchone()
         buttons = [[{"text": option, "callback_data": f"vote:{body}:{i}"}] for i, option in enumerate(json.loads(options))]
         api("sendMessage", chat_id=chat, text=question, reply_markup={"inline_keyboard": buttons})
@@ -345,12 +372,13 @@ def main(token=None, admin_text=None, status=print):
             params["reply_markup"] = json.dumps(params["reply_markup"])
             try:
                 response = requests.post(f"https://api.telegram.org/bot{token}/sendPhoto", data=params, files=files, timeout=50)
-                result = response.json()
+                try:
+                    result = response.json()
+                except requests.exceptions.JSONDecodeError:
+                    result = None
             except requests.RequestException:
                 raise OSError("Помилка зв’язку з Telegram") from None
-            if not result.get("ok"):
-                raise ApiError(result)
-            return result["result"]
+            return telegram_result(result, response.status_code)
         return telegram(token, method, **params)
     if admin_text is None:
         admin_text = os.getenv("ADMIN_ID", "").strip()
@@ -358,15 +386,7 @@ def main(token=None, admin_text=None, status=print):
     volume = os.getenv("RAILWAY_VOLUME_MOUNT_PATH")
     if not volume:
         raise SystemExit("Підключіть Volume до сервісу бота в Railway та повторіть запуск.")
-    while True:
-        try:
-            me = api("getMe")
-            break
-        except ApiError as error:
-            if error.code != 429:
-                raise
-            status(f"Telegram обмежив getMe. Повтор через {error.delay} с.")
-            time.sleep(max(1, error.delay))
+    me = get_identity(api, status)
     database = Path(volume) / f"news-{me['id']}.sqlite3"
     with closing(sqlite3.connect(database)) as db:
         initialize(db)
@@ -389,10 +409,13 @@ def main(token=None, admin_text=None, status=print):
             try:
                 api(method, **params)
             except ApiError as error:
-                if error.code != 429:
+                if error.code in (401, 404):
                     raise
-                status(f"Telegram обмежив {method} на {error.delay} с. Продовжуємо запуск.")
+                status(f"Оформлення профілю відкладено ({method}, Telegram {error.code}).")
                 retry_at = time.time() + max(1, error.delay)
+            except OSError:
+                status(f"Оформлення профілю відкладено ({method}).")
+                retry_at = time.time() + 3
             with db:
                 db.execute("INSERT OR REPLACE INTO profile_setup VALUES (?,?)", (method, retry_at))
             if retry_at is not None:
