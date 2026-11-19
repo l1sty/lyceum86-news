@@ -11,7 +11,12 @@ from urllib.request import Request, urlopen
 NEWS = "📰 Останні новини"
 ON = "🔔 Підписатися"
 OFF = "🔕 Відписатися"
-MENU = {"keyboard": [[NEWS], [ON, OFF]], "resize_keyboard": True}
+FEEDBACK = "💬 Скарги та пропозиції"
+ANONYMOUS = "Анонімна скарга"
+SIGNED = "Скарга з підписом"
+IDEA = "Пропозиція з підписом"
+CANCEL = "Скасувати"
+MENU = {"keyboard": [[NEWS], [ON, OFF], [FEEDBACK]], "resize_keyboard": True}
 COMMANDS = {"start": "Відкрити меню", "news": "Останні новини школи",
             "subscribe": "Підписатися на новини", "unsubscribe": "Скасувати підписку",
             "id": "Дізнатися свій Telegram ID"}
@@ -44,6 +49,7 @@ def telegram(token, method, **params):
 def initialize(db):
     db.executescript("""
         CREATE TABLE IF NOT EXISTS subscribers (chat INTEGER PRIMARY KEY);
+        CREATE TABLE IF NOT EXISTS feedback_flow (chat INTEGER PRIMARY KEY, stage TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS audience (
             chat INTEGER PRIMARY KEY, last_seen INTEGER NOT NULL, starts INTEGER NOT NULL
         );
@@ -64,6 +70,61 @@ def parse_admin_ids(value):
     return {int(item) for item in ids}
 
 
+def feedback_keyboard(db, chat):
+    row = db.execute("SELECT stage FROM feedback_flow WHERE chat=?", (chat,)).fetchone()
+    if not row:
+        return MENU
+    rows = [[ANONYMOUS], [SIGNED], [IDEA], [CANCEL]] if row[0] == "choose" else [[CANCEL]]
+    return {"keyboard": rows, "resize_keyboard": True}
+
+
+def handle_feedback(db, chat, text, command, admin_ids, reply):
+    row = db.execute("SELECT stage FROM feedback_flow WHERE chat=?", (chat,)).fetchone()
+    if text == FEEDBACK or command == "/feedback":
+        if not admin_ids:
+            reply("Прийом звернень поки недоступний.")
+            return True
+        db.execute("INSERT OR REPLACE INTO feedback_flow VALUES (?, 'choose')", (chat,))
+        reply("Що ви хочете надіслати редакторам 86 News?")
+        return True
+    if not row:
+        return False
+    if text == CANCEL or command.startswith("/") or text in (NEWS, ON, OFF):
+        db.execute("DELETE FROM feedback_flow WHERE chat=?", (chat,))
+        if text == CANCEL or command == "/cancel":
+            reply("Звернення скасовано.")
+            return True
+        return False
+    if row[0] == "choose":
+        if text not in (ANONYMOUS, SIGNED, IDEA):
+            reply("Оберіть тип звернення за допомогою кнопок.")
+            return True
+        db.execute("UPDATE feedback_flow SET stage=? WHERE chat=?", (text, chat))
+        if text == ANONYMOUS:
+            reply("Напишіть скаргу одним текстовим повідомленням. Редактори отримають лише текст. Для анонімності не зазначайте в ньому своє ім’я чи контакти.")
+        else:
+            reply("Напишіть звернення одним текстовим повідомленням. Редактори отримають текст і ваш Telegram ID.")
+        return True
+    if not text or len(text.encode("utf-16-le")) // 2 > 3900:
+        reply("Надішліть текст до 3900 знаків або натисніть «Скасувати».")
+        return True
+    if text in (ANONYMOUS, SIGNED, IDEA):
+        reply("Напишіть текст звернення або натисніть «Скасувати», щоб змінити тип.")
+        return True
+    db.execute("DELETE FROM feedback_flow WHERE chat=?", (chat,))
+    if not admin_ids:
+        reply("Прийом звернень поки недоступний.")
+        return True
+    header = row[0]
+    if header != ANONYMOUS:
+        header += f"\nTelegram ID автора — {chat}"
+    body = f"{header}\n\n{text}"
+    db.executemany("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,2)",
+                   [(editor, body) for editor in admin_ids])
+    reply("Звернення прийнято для надсилання редакторам.")
+    return True
+
+
 def handle(db, update, admin_ids):
     message = update.get("message", {})
     if message.get("chat", {}).get("type") != "private":
@@ -73,14 +134,17 @@ def handle(db, update, admin_ids):
     text = message.get("text", "").strip()
     parts = text.split(maxsplit=1)
     command = parts[0] if parts else ""
+    def reply(body):
+        db.execute("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,0)", (chat, body))
+
+    if handle_feedback(db, chat, text, command, admin_ids, reply):
+        return
     now = int(time.time())
     db.execute("""
         INSERT INTO audience(chat, last_seen, starts) VALUES (?, ?, ?)
         ON CONFLICT(chat) DO UPDATE SET
             last_seen = MAX(last_seen, excluded.last_seen), starts = starts + excluded.starts
     """, (chat, message.get("date", now), int(command == "/start")))
-    def reply(body):
-        db.execute("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,0)", (chat, body))
 
     if command == "/start":
         welcome = "Вітаємо у 86 News! Тут публікуємо шкільні новини. Перегляньте останні оголошення або підпишіться, щоб отримувати нові."
@@ -142,9 +206,10 @@ def run(db, api, admin_ids):
                 with db:
                     handle(db, update, admin_ids)
                     db.execute("UPDATE cursor_state SET pos=?", (update["update_id"] + 1,))
-            for row, chat, body in db.execute("SELECT id,chat,body FROM deliveries ORDER BY id LIMIT 20").fetchall():
+            for row, chat, body, kind in db.execute("SELECT id,chat,body,broadcast FROM deliveries ORDER BY id LIMIT 20").fetchall():
                 try:
-                    api("sendMessage", chat_id=chat, text=body, reply_markup=MENU)
+                    if kind != 2 or chat in admin_ids:
+                        api("sendMessage", chat_id=chat, text=body, reply_markup=feedback_keyboard(db, chat))
                 except ApiError as error:
                     if error.code not in (400, 403):
                         raise
