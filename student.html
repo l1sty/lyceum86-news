@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101114">
+<title>Одеський ліцей №86</title>
+<link rel="stylesheet" href="/game/assets/inter.css">
+<script defer src="https://telegram.org/js/telegram-web-app.js"></script>
+<script defer src="/game/assets/gsap.min.js"></script>
+<style>
+*{box-sizing:border-box} :root{color-scheme:dark;--bg:#101114;--card:#191b20;--line:#30333a;--muted:#b1b5bf;--blue:#94bcff}
+body{margin:0;background:var(--bg);color:#f5f6f9;font:1rem/1.45 Inter,system-ui,sans-serif}
+.shell{width:min(100%,760px);margin:auto;padding:0 clamp(16px,4vw,32px) calc(108px + env(safe-area-inset-bottom))}
+header{display:flex;align-items:center;gap:12px;padding:20px 0;border-bottom:1px solid var(--line)}
+.brand,.tile-icon{display:grid;place-items:center}
+.brand{flex:0 0 46px;height:46px;border:1px solid #496489;border-radius:15px;background:linear-gradient(145deg,#385983,#20334f);box-shadow:inset 0 1px #ffffff16;color:#dceaff}
+.brand svg{width:31px;height:31px;stroke-width:1.4}
+header strong{font-size:clamp(1rem,3.6vw,1.18rem);letter-spacing:-.035em;font-weight:650}header strong span{color:#b4d4ff;white-space:nowrap}
+.launch-screen{position:fixed;inset:0;z-index:10;display:grid;place-items:center;padding:20px;text-align:center;background:radial-gradient(ellipse at 65% 42%,#233c5e,#141e2e 50%,#101114 88%);animation:splash-dismiss .35s ease-in 2s forwards}
+.launch-motto{margin:0;color:#eaf3ff;font-size:clamp(2.8rem,9vw,6rem);font-weight:650;line-height:1.04;letter-spacing:-.055em}
+.launch-motto em{display:block;color:#a8ccff;font-weight:500}
+@keyframes splash-dismiss{to{opacity:0;visibility:hidden}}
+@media(prefers-reduced-motion:reduce){.launch-screen{animation-timing-function:step-end}}
+@media(prefers-reduced-motion:no-preference){
+ .launch-motto{animation:motto-reveal .6s ease-out both}
+ .launch-motto em{animation:motto-reveal .65s ease-out .14s both}
+ @keyframes motto-reveal{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+ .brand .tassel{transform-origin:25px 11px;animation:tassel-swing .95s ease-in-out .1s}
+ @keyframes tassel-swing{0%,100%{transform:rotate(0)}28%{transform:rotate(-18deg)}58%{transform:rotate(11deg)}80%{transform:rotate(-5deg)}}
+}
+button,a{font:inherit;color:inherit;-webkit-tap-highlight-color:transparent}button{cursor:pointer}button:focus-visible,a:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(135px,100%),1fr));gap:10px;margin:0}
+.metrics div{display:flex;flex-direction:column;justify-content:space-between;gap:16px;padding:16px;border:1px solid #34465d;border-radius:16px;background:linear-gradient(145deg,#202e40,#181e28)}
+.metrics dt,#stats-note{font-size:.85rem;color:var(--muted)}
+.metrics dd{margin:0;font-weight:650;font-size:1.45rem;color:#bdd9ff;font-variant-numeric:tabular-nums}
+@media(prefers-reduced-motion:no-preference){
+ #profile-stats:not([hidden]) .metrics>div{animation:metric-enter .36s ease-out backwards}
+ #profile-stats .metrics>div:nth-child(2){animation-delay:.07s}
+ @keyframes metric-enter{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+}
+svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
+h1{font-size:clamp(2rem,6vw,2.8rem);letter-spacing:-.055em;line-height:1.1;margin:28px 0 6px}
+.intro{margin:0 0 22px;color:var(--muted)}
+.feature{position:relative;isolation:isolate;overflow:hidden;display:block;text-align:left;width:100%;padding:23px;border:1px solid #3c567f;border-radius:20px;background:linear-gradient(110deg,#1d304e,#203c66 75%,#294e82)}
+.feature:after{content:"86";position:absolute;right:-.02em;bottom:-.28em;font-size:clamp(8rem,24vw,12rem);font-weight:800;letter-spacing:-.12em;line-height:1.3;color:transparent;-webkit-text-stroke:1px #769bce55;transform:rotate(-8deg);z-index:-1}
+.feature .waves{position:absolute;inset:-14% -9%;width:118%;height:128%;z-index:-2;pointer-events:none;stroke:url(#wave-ink);stroke-width:1;fill:none}
+@media(prefers-reduced-motion:no-preference){
+ .feature .waves{animation:wave-drift 20s ease-in-out infinite alternate}
+ @keyframes wave-drift{from{transform:translate(-2%,2%) rotate(-1deg)}to{transform:translate(3%,-3%) rotate(1deg)}}
+}
+.feature small{display:flex;align-items:center;gap:8px;color:#c0d8ff;font-weight:600}.feature strong{display:block;max-width:75%;margin:13px 0;font-size:clamp(1.3rem,4vw,1.7rem);line-height:1.15;letter-spacing:-.04em}
+.feature span{display:inline-block;background:#dceaff;color:#172f51;border-radius:20px;padding:7px 13px;font-size:.85rem;font-weight:650}
+h2{font-size:1.06rem;letter-spacing:-.025em;margin:24px 0 12px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.tile{display:flex;align-items:flex-start;flex-direction:column;gap:13px;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:15px;padding:15px;font-weight:600;line-height:1.25;min-height:96px}
+.tile-icon{color:var(--blue)}.tile small{font-size:.82rem;font-weight:450;color:var(--muted);display:block;margin-top:4px}
+.tile-icon{width:38px;height:38px;border:1px solid #375171;border-radius:12px;background:linear-gradient(145deg,#283e59,#1b293d);color:#bedaff;box-shadow:inset 0 1px #ffffff0c}
+.tile-icon svg{width:24px;height:24px}
+.tile-icon .accent{fill:#82b7ff;stroke:none}
+@media(prefers-reduced-motion:no-preference){
+ .tile-icon .moving{animation:var(--motion) .64s ease-in-out both;animation-delay:var(--delay,0s);transform-box:fill-box;transform-origin:center}
+ .tile-icon .bar{--motion:chart-rise;transform-origin:center bottom}
+ .tile-icon .dot{--motion:dot-bob}
+ .tile-icon .lens{--motion:lens-search}
+ .tile-icon .ringer{--motion:bell-swing;transform-origin:50% 12%}
+ .tile-icon .second{--delay:.07s}.tile-icon .third{--delay:.14s}
+ @keyframes chart-rise{0%{transform:scaleY(.45)}65%{transform:scaleY(1.09)}}
+ @keyframes dot-bob{45%{transform:translateY(-2px)}}
+ @keyframes lens-search{40%{transform:translate(1.5px,-1.5px) rotate(-7deg)}}
+ @keyframes bell-swing{25%{transform:rotate(13deg)}55%{transform:rotate(-9deg)}80%{transform:rotate(4deg)}}
+}
+button{transition:transform .14s ease,background-color .18s}.tile:hover{background:#21252c}button:active{transform:scale(.98)}
+nav{position:fixed;bottom:calc(10px + env(safe-area-inset-bottom));inset-inline:0;margin:auto;width:min(calc(100% - 24px),520px);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:5px;z-index:2;isolation:isolate;border:1px solid #36404e;border-radius:23px;background:#191e26f5;box-shadow:0 8px 26px #0006,inset 0 1px #ffffff09}
+nav::before{content:"";position:absolute;z-index:-1;inset:5px auto 5px 5px;width:calc((100% - 10px)/3);border-radius:18px;background:linear-gradient(155deg,#304c70,#233349);box-shadow:inset 0 0 0 1px #6b94c145;transform:translateX(var(--tab-position,0%))}
+nav a{display:grid;justify-items:center;align-content:center;gap:3px;min-height:52px;text-decoration:none;color:#b5bfce;font-size:.82rem;font-weight:550;border-radius:18px}
+nav i{display:grid;place-items:center}nav svg{width:21px;height:21px;fill:#293342}
+nav a:hover,nav a:focus-visible{color:#e2ecfb}nav a[aria-current=page]{color:#e5efff;font-weight:650}
+nav a[aria-current=page] svg{color:#bedbff;fill:#46658c}
+@media(prefers-reduced-motion:no-preference){nav::before{transition:transform .29s cubic-bezier(.22,.78,.28,1)}nav a{transition:color .18s}nav a:active i{transform:scale(.93)}}
+[hidden]{display:none!important}
+#notice{color:#ffda96} @media(prefers-reduced-motion:reduce){button{transition:none}button:active{transform:none}}
+</style>
+<style>
+:root{
+ --safe-top:max(env(safe-area-inset-top,0px),calc(var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px)));
+ --safe-bottom:max(env(safe-area-inset-bottom,0px),calc(var(--tg-safe-area-inset-bottom,0px) + var(--tg-content-safe-area-inset-bottom,0px)));
+ --safe-side:max(env(safe-area-inset-left,0px),env(safe-area-inset-right,0px),var(--tg-safe-area-inset-left,0px),var(--tg-safe-area-inset-right,0px));
+}
+.shell{padding-block:var(--safe-top) calc(108px + var(--safe-bottom));padding-inline:max(clamp(16px,4vw,32px),calc(var(--safe-side) + 8px))}
+nav{bottom:calc(8px + var(--safe-bottom));width:min(calc(100% - 24px - var(--safe-side) * 2),520px)}
+.tile span,.metrics dd{min-width:0;overflow-wrap:anywhere}
+@media(max-width:480px){
+ header{padding-block:13px;gap:10px}
+ h1{margin-top:20px}
+ .intro{margin-bottom:16px}
+ .feature{padding:17px;border-radius:17px}
+ .feature strong{max-width:85%;margin:10px 0}
+ .tile{padding:12px;gap:9px}
+ h2{margin:19px 0 10px}
+ .metrics div{padding:13px;gap:10px}
+}
+@media(max-width:360px){
+ .grid,.metrics{grid-template-columns:1fr}
+ .tile{flex-direction:row;align-items:center;min-height:58px}
+ .tile-icon{flex-shrink:0}
+ .metrics div{flex-direction:row;align-items:center}
+}
+@media(orientation:landscape) and (max-height:520px){
+ header{padding-block:8px}
+ h1{margin-top:14px}
+ nav a{grid-auto-flow:column;justify-content:center;align-items:center;gap:8px;min-height:44px}
+ .shell{padding-bottom:calc(84px + var(--safe-bottom))}
+}
+</style>
+</head>
+<body>
+<div class="launch-screen"><p class="launch-motto">Будуємо <em>майбутнє</em></p></div>
+<div class="shell">
+<header>
+ <div class="brand" aria-hidden="true">
+  <svg viewBox="0 0 32 32">
+   <path d="M8 14v6q8 7 16 0v-6" fill="#4b739f"/>
+   <path d="m2 12 14-7 14 7-14 7Z" fill="#8fb3df"/>
+   <path d="m16 11 9 1" stroke="#314d71"/>
+   <g class="tassel"><path d="M25 12v8" stroke="#f0f6ff"/><path d="m25 20-1 3h2Z" fill="#e3edff"/></g>
+  </svg>
+ </div>
+ <strong>Одеський ліцей <span>№86</span></strong>
+</header>
+<main>
+<h1 id="heading" tabindex="-1">Вітаємо!</h1><p class="intro"></p>
+<button class="feature" data-action="news">
+ <svg class="waves" viewBox="0 0 720 200" preserveAspectRatio="none" aria-hidden="true">
+  <defs><linearGradient id="wave-ink" gradientUnits="userSpaceOnUse" x1="90" x2="690" y1="0" y2="0">
+   <stop stop-color="#8bbaff" stop-opacity=".02"/><stop offset=".6" stop-color="#9acaff" stop-opacity=".23"/><stop offset="1" stop-color="#82abeb" stop-opacity=".09"/>
+  </linearGradient></defs>
+  <path d="M-20 149 C120 137 170 204 292 157 S466 25 556 63 S674 124 748 56
+           M-20 153 C120 139 170 201 292 153 S467 34 556 68 S674 118 748 53
+           M-20 158 C120 142 171 198 292 149 S468 43 556 73 S674 112 748 50
+           M-20 164 C120 145 172 195 292 145 S469 52 556 78 S674 106 748 47
+           M-20 171 C120 149 173 192 292 141 S470 61 556 83 S674 100 748 44
+           M-20 179 C120 154 174 189 292 137 S471 70 556 88 S674 94 748 41
+           M-20 188 C120 160 175 186 292 133 S472 79 556 93 S674 88 748 38
+           M-20 198 C120 167 176 183 292 129 S473 88 556 98 S674 82 748 35"/>
+ </svg>
+ <small><i data-icon="news"></i> Інформаційний центр</small><strong>Оголошення ліцею</strong><span>Читати новини</span>
+</button>
+<section id="profile-stats" hidden aria-labelledby="stats-title">
+ <h2 id="stats-title">Моя статистика</h2>
+ <dl class="metrics">
+  <div><dt>Опитування з моїм голосом</dt><dd id="poll-count">—</dd></div>
+  <div><dt>Підписка на новини</dt><dd id="subscription">—</dd></div>
+ </dl>
+ <p id="stats-note"></p>
+</section>
+<h2 id="section-title"></h2><div class="grid"></div>
+<p id="notice" role="status"></p>
+</main>
+</div>
+<nav aria-label="Основна навігація"><a href="#home"><i data-icon="home"></i>Головна</a><a href="#community"><i data-icon="users"></i>Спільнота</a><a href="#profile"><i data-icon="user"></i>Профіль</a></nav>
+<noscript>Увімкніть JavaScript, щоб відкрити простір ліцею.</noscript>
+<script>
+const paths = {
+ bell:'M5 17h14l-2-3v-4a5 5 0 0 0-10 0v4l-2 3Zm5 3q2 2 4 0',
+ news:'M5 4h15v15a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8h2Zm0 0v14m4-10h7m-7 4h7m-7 4h4',
+ polls:'M4 4v16h16M8 15v-4m5 4V6m5 9V9',feedback:'M21 11a9 8 0 0 1-13 7l-5 2 1-5a9 8 0 1 1 17-4Z',
+ status:'M15 15l6 6M17 10a7 7 0 1 1-14 0 7 7 0 1 1 14 0Z',
+ home:'M2 11l10-8 10 8M5 10v11h5v-7h4v7h5V10',user:'M16 7a4 4 0 1 1-8 0 4 4 0 1 1 8 0ZM4 21c0-8 16-8 16 0',
+ users:'M14 8a4 4 0 1 1-8 0 4 4 0 1 1 8 0ZM2 20c0-8 16-8 16 0m-1-15q5 2 2 7m0 3q3 1 3 5',
+ mute:'M3 3l18 18M7 9v5l-2 3h12m0-5v-2a5 5 0 0 0-6-5m-1 15q2 2 4 0',
+ editor:'M4 20l5-1L21 7l-4-4L5 15l-1 5Zm10-14 4 4',game:'M6 7h12c4 0 6 14 1 12l-4-4H9l-4 4C0 21 2 7 6 7Zm1 3v4m-2-2h4m7-1h.1m2 2h.1'
+};
+const tileArtwork={
+ polls:'<path d="M3 20h18"/><g class="accent"><rect class="moving bar" x="4" y="11" width="3.5" height="6" rx="1.4"/><rect class="moving bar second" x="10" y="4" width="3.5" height="13" rx="1.4"/><rect class="moving bar third" x="16" y="8" width="3.5" height="9" rx="1.4"/></g>',
+ feedback:'<path fill="#375778" d="M20.5 10.8c0 4.4-3.7 7.9-8.5 7.9-1.1 0-2.3-.2-3.3-.6L4 20l.8-4.4a7.8 7.8 0 0 1-1.3-4.8C3.5 6.5 7.3 3 12 3s8.5 3.5 8.5 7.8Z"/><g class="accent"><circle class="moving dot" cx="8" cy="11" r="1.1"/><circle class="moving dot second" cx="12" cy="11" r="1.1"/><circle class="moving dot third" cx="16" cy="11" r="1.1"/></g>',
+ status:'<g class="moving lens"><path d="m15.5 15.5 5 5" stroke-width="2.5"/><circle cx="10.5" cy="10.5" r="6.8" fill="#375778"/><path d="M7.2 10a3.5 3.5 0 0 1 3-3" stroke="#93c2ff"/></g>',
+ bell:'<g class="moving ringer"><path d="M10 19a2.2 2.2 0 0 0 4 0" stroke="#82b7ff"/><path fill="#375778" d="M5 16c2-2 2-3.5 2-6a5 5 0 0 1 10 0c0 2.5 0 4 2 6v1H5Z"/><path d="M12 3v1.5"/></g>'
+};
+function icon(key,tile=false){
+ const drawing=(tile && tileArtwork[key]) || '<path d="'+paths[key]+'"/>';
+ return '<svg aria-hidden="true" viewBox="0 0 24 24">'+drawing+'</svg>';
+}
+document.querySelectorAll('[data-icon]').forEach(el=>el.innerHTML=icon(el.dataset.icon));
+const actions={
+ news:['news','Останні новини'],polls:['polls','Опитування'],feedback:['feedback','Скарги та пропозиції'],status:['status','Статус звернення'],
+ subscribe:['bell','Підписатися','Отримувати оголошення'],unsubscribe:['mute','Відписатися','Вимкнути розсилку'],
+ editor:['editor','Редакція'],game:['game','Місто']
+};
+const staff=new URLSearchParams(location.search).get('editor')==='1'?['editor','game']:[];
+const pages={
+ home:['Вітаємо!','Ваш особистий простір ліцею','Сервіси ліцею',['polls','feedback','status','subscribe',...staff]],
+ community:['Спільнота','Голосуйте та звертайтеся до редакції.','Участь у житті ліцею',['polls','feedback','status',...staff]],
+ profile:['Мій профіль','Ваша активність у боті ліцею.','Керування підпискою',['subscribe','unsubscribe']]
+};
+const notice=document.querySelector('#notice');
+function displayProfile(){
+ const params=new URLSearchParams(location.search);
+ const available=['polls','at'].every(key=>/^\d{1,12}$/.test(params.get(key))) && ['0','1'].includes(params.get('sub'));
+ const note=document.querySelector('#stats-note');
+ if(!available){
+   note.textContent='Надішліть /start у чаті бота й відкрийте профіль кнопкою Launch mini app, щоб побачити свої дані.';
+   return;
+ }
+ document.querySelector('#poll-count').textContent=params.get('polls');
+ document.querySelector('#subscription').textContent=params.get('sub')==='1'?'Активна':'Вимкнена';
+ const updated=new Date(Number(params.get('at'))*1000).toLocaleString('uk-UA',{dateStyle:'short',timeStyle:'short'});
+ note.textContent='Оновлено '+updated+'. Щоб отримати свіжі дані, надішліть /start у чаті.';
+}
+function render(focus){
+ const key=Object.hasOwn(pages,location.hash.slice(1))?location.hash.slice(1):'home';
+ const [title,intro,section,items]=pages[key];
+ const heading=document.querySelector('h1');
+ heading.textContent=title;
+ document.querySelector('.intro').textContent=intro;
+ document.querySelector('.feature').hidden=key!=='home';
+ document.querySelector('#profile-stats').hidden=key!=='profile';
+ if(key==='profile')displayProfile();
+ document.querySelector('#section-title').textContent=section;
+ notice.textContent='';
+ document.querySelector('.grid').innerHTML=items.map(id=>{
+   const [glyph,label,hint]=actions[id];
+   return '<button class="tile" data-action="'+id+'"><i class="tile-icon">'+icon(glyph,true)+'</i><span>'+label+(hint?'<small>'+hint+'</small>':'')+'</span></button>';
+ }).join('');
+ document.querySelectorAll('nav a').forEach((link,index)=>{
+   if(link.hash==='#'+key){
+     link.setAttribute('aria-current','page');
+     link.parentElement.style.setProperty('--tab-position',(index*100)+'%');
+   }else link.removeAttribute('aria-current');
+ });
+ if(focus){window.scrollTo(0,0);heading.focus({preventScroll:true})}
+ if(window.gsap&&!matchMedia('(prefers-reduced-motion: reduce)').matches){
+   gsap.from('.tile',{opacity:0,y:7,duration:.26,stagger:.025,ease:'power2.out',clearProps:'transform,opacity'});
+ }
+}
+addEventListener('DOMContentLoaded',()=>{
+ const grid=document.querySelector('.grid');
+ function replayIcon(event){
+   const tile=event.target.closest('.tile');
+   if(!tile || tile.contains(event.relatedTarget))return;
+   tile.querySelectorAll('.moving').forEach(part=>{
+     for(const motion of part.getAnimations?.() || []){
+       if(motion.playState==='finished'){motion.currentTime=0;motion.play()}
+     }
+   });
+ }
+ grid.addEventListener('pointerover',replayIcon);
+ grid.addEventListener('focusin',replayIcon);
+ const tg=window.Telegram?.WebApp;
+ tg?.ready();tg?.expand();
+ render(false);
+ document.addEventListener('click',event=>{
+   const button=event.target.closest('[data-action]');
+   if(!button)return;
+   if(!tg?.platform||tg.platform==='unknown'){
+     notice.textContent='Відкрийте простір кнопкою в чаті бота, щоб виконати цю дію.';
+     notice.scrollIntoView({block:'nearest'});return;
+   }
+   tg.sendData(button.dataset.action);
+ });
+});
+addEventListener('hashchange',()=>render(true));
+</script>
+</body>
+</html>

@@ -13,7 +13,7 @@ from flask import Flask, g, jsonify, request, send_file
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 
-def editor_id(raw, token, admins):
+def telegram_user(raw, token):
     try:
         pairs = parse_qsl(raw, strict_parsing=True, keep_blank_values=True, max_num_fields=32)
         fields = dict(pairs)
@@ -26,10 +26,15 @@ def editor_id(raw, token, admins):
         if not hmac.compare_digest(signature, expected):
             return None
         age = time.time() - int(fields["auth_date"])
-        uid = json.loads(fields["user"])["id"]
-        return uid if -30 <= age <= 3600 and type(uid) is int and uid in admins else None
+        user = json.loads(fields["user"])
+        return user if -30 <= age <= 3600 and type(user["id"]) is int else None
     except (ValueError, KeyError, TypeError):
         return None
+
+
+def editor_id(raw, token, admins):
+    user = telegram_user(raw, token)
+    return user["id"] if user and user["id"] in admins else None
 
 
 def prepare_photo(upload):
@@ -48,6 +53,8 @@ def prepare_photo(upload):
 
 def create_panel(database, token, admins, publish):
     app = Flask(__name__, static_folder=None)
+    from game.web import register
+    register(app, database, token, telegram_user, admins)
     app.config["MAX_CONTENT_LENGTH"] = 9 * 1024 * 1024
 
     def page_cursor():
@@ -121,6 +128,10 @@ def create_panel(database, token, admins, publish):
     @app.get("/")
     def index():
         return send_file(Path(__file__).with_name("editor.html"), max_age=0)
+
+    @app.get("/app/")
+    def student_app():
+        return send_file(Path(__file__).with_name("student.html"), max_age=0)
 
     @app.route("/api/editor", methods=["GET", "POST"])
     def editor():

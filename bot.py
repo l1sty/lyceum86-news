@@ -9,6 +9,7 @@ import secrets
 import requests
 from pathlib import Path
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 
@@ -25,6 +26,9 @@ TRACK = "Статус звернення"
 POLLS = "Опитування"
 POLL_BROADCAST = 4
 POLL_REQUEST = 5
+GAME = "Місто"
+APP_ACTIONS = {"news": NEWS, "polls": POLLS, "feedback": FEEDBACK, "status": TRACK,
+               "subscribe": ON, "unsubscribe": OFF, "editor": EDITOR, "game": GAME}
 MENU = {"keyboard": [[NEWS, POLLS], [FEEDBACK, TRACK], [ON, OFF]], "resize_keyboard": True}
 COMMANDS = {"start": "Відкрити меню", "news": "Останні новини школи",
             "subscribe": "Підписатися на новини", "unsubscribe": "Скасувати підписку",
@@ -157,7 +161,7 @@ def handle_feedback(db, chat, text, command, admin_ids, reply):
         return True
     if not row:
         return False
-    if text == CANCEL or command.startswith("/") or text in (NEWS, ON, OFF, POLLS, EDITOR):
+    if text == CANCEL or command.startswith("/") or text in (NEWS, ON, OFF, POLLS, EDITOR, GAME):
         db.execute("DELETE FROM feedback_flow WHERE chat=?", (chat,))
         if text == CANCEL or command == "/cancel":
             reply("Звернення скасовано.")
@@ -210,6 +214,11 @@ def handle(db, update, admin_ids):
     chat = message["chat"]["id"]
     is_editor = chat in admin_ids and message.get("from", {}).get("id") == chat
     text = message.get("text", "").strip()
+    if "web_app_data" in message:
+        action = message["web_app_data"].get("data")
+        if not isinstance(action, str) or action not in APP_ACTIONS:
+            return
+        text = APP_ACTIONS[action]
     parts = text.split(maxsplit=1)
     command = parts[0] if parts else ""
     def reply(body, photo=None):
@@ -243,6 +252,14 @@ def handle(db, update, admin_ids):
             reply(body, photo)
         if not items:
             reply("Шкільних новин поки немає. Підпишіться, щоб отримати перше оголошення.")
+    elif command == "/game" or text == GAME:
+        if not is_editor:
+            reply("Гра доступна лише адміністраторам.")
+        elif panel_url().startswith("https://"):
+            db.execute("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,6)",
+                       (chat, "Місто · настільна гра для 2–6 учасників."))
+        else:
+            reply("Для гри потрібно підключити публічний HTTPS-домен.")
     elif command == "/admin" or text == EDITOR:
         if not is_editor:
             reply("Панель доступна лише редакторам.")
@@ -297,13 +314,26 @@ def deliver(db, api, chat, body, kind, photo, admin_ids):
         db.execute("INSERT INTO poll_messages VALUES (?,?,?,?)",
                    (body, chat, message["message_id"], message["date"]))
         return
-    if kind in (2, 3) and chat not in admin_ids:
+    if kind in (2, 3, 6) and chat not in admin_ids:
         return
     markup = feedback_keyboard(db, chat)
-    if kind == 3:
+    if kind == 6:
+        markup = {"inline_keyboard": [[{"text": "Відкрити гру", "web_app": {"url": panel_url().rstrip("/") + "/game/"}}]]}
+    elif kind == 3:
         markup = {"inline_keyboard": [[{"text": "Відкрити редакцію", "web_app": {"url": panel_url()}}]]}
+    elif markup is MENU and panel_url().startswith("https://"):
+        polls, subscribed = db.execute("""
+            SELECT (SELECT COUNT(*) FROM votes WHERE voter=?),
+                   EXISTS(SELECT 1 FROM subscribers WHERE chat=?)
+        """, (chat, chat)).fetchone()
+        profile = {"polls": polls, "sub": subscribed, "at": int(time.time())}
+        if chat in admin_ids:
+            profile["editor"] = 1
+        url = panel_url().rstrip("/") + "/app/?" + urlencode(profile)
+        markup = {"keyboard": [[{"text": "Launch mini app", "web_app": {"url": url}}]],
+                  "resize_keyboard": True, "is_persistent": True}
     elif chat in admin_ids and markup is MENU:
-        markup = dict(MENU, keyboard=MENU["keyboard"] + [[EDITOR]])
+        markup = dict(MENU, keyboard=MENU["keyboard"] + [[EDITOR, GAME]])
     if photo is None:
         api("sendMessage", chat_id=chat, text=body, reply_markup=markup)
         return
@@ -427,6 +457,8 @@ def main(token=None, admin_text=None, status=print):
         server = create_server(create_panel(database, token, admin_ids, publish), host="0.0.0.0",
                                port=int(os.getenv("PORT", "8080")), max_request_body_size=9*1024*1024)
         threading.Thread(target=server.run, daemon=True).start()
+        from game.web import start_clock
+        start_clock(database)
         db.execute("CREATE TABLE IF NOT EXISTS profile_setup (method TEXT PRIMARY KEY, retry_at REAL)")
         settings = {
             "setMyName": {"name": "86 News"},
