@@ -95,6 +95,13 @@ def initialize(db):
         CREATE TABLE IF NOT EXISTS cases (code TEXT PRIMARY KEY, body TEXT NOT NULL,
             state TEXT NOT NULL DEFAULT 'Отримано', answer TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 0);
         CREATE TABLE IF NOT EXISTS polls (id INTEGER PRIMARY KEY, question TEXT NOT NULL, options TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS deleted_polls (id INTEGER PRIMARY KEY);
+        CREATE VIEW IF NOT EXISTS active_polls AS
+            SELECT * FROM polls WHERE id NOT IN (SELECT id FROM deleted_polls);
+        CREATE TABLE IF NOT EXISTS poll_messages (
+            poll INTEGER, chat INTEGER, message INTEGER, sent INTEGER, PRIMARY KEY(chat,message));
+        CREATE INDEX IF NOT EXISTS poll_messages_poll ON poll_messages(poll);
+        CREATE INDEX IF NOT EXISTS poll_messages_sent ON poll_messages(sent);
         CREATE TABLE IF NOT EXISTS votes (poll INTEGER, voter INTEGER, choice INTEGER, PRIMARY KEY(poll,voter));
         CREATE TABLE IF NOT EXISTS submissions (editor INTEGER, nonce TEXT, PRIMARY KEY(editor,nonce));
     """)
@@ -245,7 +252,7 @@ def handle(db, update, admin_ids):
             db.execute("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,3)",
                        (chat, "Відкрийте редакцію, щоб підготувати новину."))
     elif command == "/polls" or text == POLLS:
-        polls = db.execute("SELECT id FROM polls ORDER BY id DESC LIMIT 5").fetchall()
+        polls = db.execute("SELECT id FROM active_polls ORDER BY id DESC LIMIT 5").fetchall()
         for poll, in reversed(polls):
             db.execute("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,?)", (chat, str(poll), POLL_REQUEST))
         if not polls:
@@ -281,9 +288,14 @@ def handle(db, update, admin_ids):
 
 def deliver(db, api, chat, body, kind, photo, admin_ids):
     if kind in (POLL_BROADCAST, POLL_REQUEST):
-        question, options = db.execute("SELECT question,options FROM polls WHERE id=?", (body,)).fetchone()
+        row = db.execute("SELECT question,options FROM active_polls WHERE id=?", (body,)).fetchone()
+        if row is None:
+            return
+        question, options = row
         buttons = [[{"text": option, "callback_data": f"vote:{body}:{i}"}] for i, option in enumerate(json.loads(options))]
-        api("sendMessage", chat_id=chat, text=question, reply_markup={"inline_keyboard": buttons})
+        message = api("sendMessage", chat_id=chat, text=question, reply_markup={"inline_keyboard": buttons})
+        db.execute("INSERT INTO poll_messages VALUES (?,?,?,?)",
+                   (body, chat, message["message_id"], message["date"]))
         return
     if kind in (2, 3) and chat not in admin_ids:
         return
@@ -309,13 +321,32 @@ def record_vote(db, callback):
     if len(parts) != 3 or parts[0] != "vote" or not all(p.isascii() and p.isdecimal() and len(p) < 19 for p in parts[1:]):
         return "Невідома дія."
     poll, choice = map(int, parts[1:])
-    row = db.execute("SELECT options FROM polls WHERE id=?", (poll,)).fetchone()
-    options = json.loads(row[0]) if row else []
+    row = db.execute("SELECT options FROM active_polls WHERE id=?", (poll,)).fetchone()
+    if row is None:
+        return "Опитування видалено."
+    options = json.loads(row[0])
     if choice >= len(options):
         return "Варіант недоступний."
-    db.execute("INSERT INTO votes VALUES (?,?,?) ON CONFLICT(poll,voter) DO UPDATE SET choice=excluded.choice",
-               (poll, callback["from"]["id"], choice))
+    if not db.execute("INSERT INTO votes SELECT id,?,? FROM active_polls WHERE id=? "
+                      "ON CONFLICT(poll,voter) DO UPDATE SET choice=excluded.choice",
+                      (callback["from"]["id"], choice, poll)).rowcount:
+        return "Опитування видалено."
     return "Ваш голос зараховано: " + options[choice]
+
+
+def remove_poll_messages(db, api):
+    with db:
+        db.execute("DELETE FROM poll_messages WHERE sent<=?", (int(time.time()) - 48 * 3600,))
+    rows = db.execute("SELECT chat,message FROM poll_messages WHERE poll IN "
+                      "(SELECT id FROM deleted_polls) LIMIT 20").fetchall()
+    for chat, message in rows:
+        try:
+            api("deleteMessage", chat_id=chat, message_id=message)
+        except ApiError as error:
+            if error.code not in (400, 403):
+                raise
+        with db:
+            db.execute("DELETE FROM poll_messages WHERE chat=? AND message=?", (chat, message))
 
 
 def run(db, api, admin_ids):
@@ -338,6 +369,7 @@ def run(db, api, admin_ids):
                     except ApiError as error:
                         if error.code != 400:
                             raise
+            remove_poll_messages(db, api)
             for row, chat, body, kind, photo in db.execute("SELECT id,chat,body,broadcast,photo FROM deliveries ORDER BY id LIMIT 20").fetchall():
                 try:
                     deliver(db, api, chat, body, kind, photo, admin_ids)

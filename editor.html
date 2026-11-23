@@ -195,6 +195,19 @@ function renderPoll(item, parent) {
     const bar = node('meter',undefined,article);
     bar.max = total || 1; bar.value = count; bar.setAttribute('aria-label',label);
   });
+  const remove = node('button','Видалити опитування',article);
+  remove.onclick = async () => {
+    if (!window.confirm('Видалити опитування «'+item.question+'» та всі його голоси?')) return;
+    remove.disabled = true;
+    try {
+      await call({method:'DELETE'},'/api/polls/'+item.id);
+      article.remove();
+      await loadList('polls');
+    } catch (e) {
+      el('pollsError').textContent = e.message;
+      remove.disabled = false;
+    }
+  };
 }
 function renderCase(item, parent) {
   const card = node('details',undefined,parent);

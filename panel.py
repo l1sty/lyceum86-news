@@ -73,7 +73,7 @@ def create_panel(database, token, admins, publish):
         with closing(sqlite3.connect(database, timeout=15)) as db, db:
             if request.method == "GET":
                 items = []
-                rows = db.execute("SELECT id,question,options FROM polls WHERE id<? ORDER BY id DESC LIMIT 21", (page_cursor(),)).fetchall()
+                rows = db.execute("SELECT id,question,options FROM active_polls WHERE id<? ORDER BY id DESC LIMIT 21", (page_cursor(),)).fetchall()
                 for pid, question, raw in rows[:20]:
                     counts = dict(db.execute("SELECT choice,COUNT(*) FROM votes WHERE poll=? GROUP BY choice", (pid,)))
                     items.append(dict(id=pid, question=question, options=json.loads(raw), counts=counts))
@@ -89,6 +89,17 @@ def create_panel(database, token, admins, publish):
             if db.execute("INSERT OR IGNORE INTO submissions VALUES (?,?)", (g.editor, nonce)).rowcount:
                 pid = db.execute("INSERT INTO polls(question,options) VALUES (?,?)", (question,json.dumps(options))).lastrowid
                 db.execute("INSERT INTO deliveries(chat,body,broadcast) SELECT chat,?,4 FROM subscribers", (str(pid),))
+        return jsonify(ok=True)
+
+    @app.delete("/api/polls/<int:pid>")
+    def delete_poll(pid):
+        if pid >= 2**63:
+            return jsonify(error="Опитування не знайдено."), 404
+        with closing(sqlite3.connect(database, timeout=15)) as db, db:
+            db.execute("INSERT OR IGNORE INTO deleted_polls SELECT id FROM polls WHERE id=?", (pid,))
+            if not db.execute("SELECT 1 FROM deleted_polls WHERE id=?", (pid,)).fetchone():
+                return jsonify(error="Опитування не знайдено."), 404
+            db.execute("DELETE FROM votes WHERE poll=?", (pid,))
         return jsonify(ok=True)
 
     @app.route("/api/cases", methods=["GET", "POST"])

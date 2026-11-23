@@ -20,9 +20,15 @@ class DeliveryTests(unittest.TestCase):
             bot.handle(self.db, {"message": {"chat": {"type": "private", "id": 7}, "text": text}}, set())
         pending = self.db.execute("SELECT chat,body,broadcast,photo FROM deliveries WHERE body='1'").fetchall()
         self.assertEqual(len(pending), 1)
-        api = Mock()
+        api = Mock(return_value={"message_id": 77, "date": int(bot.time.time())})
         bot.deliver(self.db, api, *pending[0], set())
         self.assertEqual(api.call_args.kwargs["reply_markup"]["inline_keyboard"][0][0]["callback_data"], "vote:1:0")
+        self.db.execute("INSERT INTO deleted_polls VALUES (1)")
+        bot.deliver(self.db, api, *pending[0], set())
+        self.assertEqual(api.call_count, 1)
+        bot.remove_poll_messages(self.db, api)
+        api.assert_called_with("deleteMessage", chat_id=7, message_id=77)
+        self.assertEqual(bot.record_vote(self.db, {"data": "vote:1:0"}), "Опитування видалено.")
 
     def test_temporary_delivery_failure_keeps_queued_news(self):
         self.db.execute("INSERT INTO subscribers VALUES (7)")
