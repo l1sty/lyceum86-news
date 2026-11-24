@@ -350,7 +350,8 @@ def deliver(db, api, chat, body, kind, photo, admin_ids, token=None):
     elif kind == 6:
         markup = {"inline_keyboard": [[{"text": "Відкрити гру", "web_app": {"url": panel_url().rstrip("/") + "/game/"}}]]}
     elif kind == 3:
-        markup = {"inline_keyboard": [[{"text": "Відкрити редакцію", "web_app": {"url": panel_url()}}]]}
+        url = panel_url().rstrip("/") + "/app/?view=editor"
+        markup = {"inline_keyboard": [[{"text": "Відкрити редакцію", "web_app": {"url": url}}]]}
     elif markup is MENU and panel_url().startswith("https://"):
         profile = {}
         if token:

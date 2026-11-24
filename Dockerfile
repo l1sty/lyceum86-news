@@ -3,6 +3,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY bot.py panel.py editor.html student.html ./
+COPY editor_assets ./editor_assets
 COPY game ./game
 ENV PORT=8080
 EXPOSE 8080

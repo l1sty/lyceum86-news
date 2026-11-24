@@ -3,7 +3,6 @@ import hashlib
 import hmac
 import io
 import json
-from pathlib import Path
 import sqlite3
 import time
 import requests
@@ -11,7 +10,7 @@ from itsdangerous import URLSafeTimedSerializer, BadData
 from urllib.parse import parse_qsl
 from uuid import UUID
 
-from flask import Flask, g, jsonify, request, send_file
+from flask import Flask, g, jsonify, render_template, request, send_file
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 
@@ -61,7 +60,8 @@ def prepare_photo(upload):
 
 
 def create_panel(database, token, admins, publish, bot_username=None):
-    app = Flask(__name__, static_folder=None)
+    app = Flask(__name__, template_folder="",
+                static_folder="editor_assets", static_url_path="/app/assets")
     from game.web import register
     register(app, database, token, app_user, admins, bot_username)
     app.config["MAX_CONTENT_LENGTH"] = 9 * 1024 * 1024
@@ -82,14 +82,14 @@ def create_panel(database, token, admins, publish, bot_username=None):
         if request.path.startswith("/api/"):
             user = app_user(raw, token)
             if not user or user["id"] not in admins:
-                return jsonify(error="Відкрийте редакцію через /admin з облікового запису редактора."), 403
+                return jsonify(error="Редакція доступна лише з облікового запису редактора. Відкрийте застосунок у Telegram."), 403
             g.editor = user["id"]
 
     @app.after_request
     def cache_policy(response):
         if request.path.startswith(("/api/", "/app/api/")):
             response.headers["Cache-Control"] = "no-store"
-        if request.path.startswith("/app/"):
+        if request.path == "/" or request.path.startswith("/app/"):
             response.headers["Referrer-Policy"] = "no-referrer"
         return response
 
@@ -247,12 +247,10 @@ def create_panel(database, token, admins, publish, bot_username=None):
         return jsonify(ok=True)
 
     @app.get("/")
-    def index():
-        return send_file(Path(__file__).with_name("editor.html"), max_age=0)
-
     @app.get("/app/")
     def student_app():
-        return send_file(Path(__file__).with_name("student.html"), max_age=0)
+        initial_page = "editor" if request.path == "/" or request.args.get("view") == "editor" else "home"
+        return render_template("student.html", initial_page=initial_page)
 
     @app.route("/api/editor", methods=["GET", "POST"])
     def editor():

@@ -1,0 +1,127 @@
+#editor-workspace {
+  --editor-field: #141a22;
+  --editor-border: #3c4b61;
+  margin-top: 20px;
+  overflow-wrap: anywhere;
+}
+
+.editor-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 6px;
+  background: #191e26;
+  border: 1px solid #36404e;
+  border-radius: 18px;
+}
+
+#editor-workspace button, #editor-workspace .attach {
+  min-height: 44px;
+  padding: 9px 13px;
+  border: 1px solid var(--editor-border);
+  border-radius: 12px;
+  color: #e5efff;
+  background: #202b39;
+  font: inherit;
+  font-weight: 600;
+}
+
+.editor-tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+#editor-workspace .editor-tabs button {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: .875rem;
+}
+
+#editor-workspace .editor-tabs button[aria-pressed="true"] {
+  border-color: #45638a;
+  background: linear-gradient(155deg, #304c70, #233349);
+  color: #e5efff;
+}
+
+.editor-tabs span {display: flex; flex-shrink: 0; color: var(--blue)}
+.editor-tabs svg {width: 18px; height: 18px}
+#editor-workspace button:disabled {opacity: .55; cursor: default}
+#editor-workspace .primary {width: 100%; background: #bdd9ff; border-color: transparent; color: #152942}
+#editor-workspace .primary:enabled:hover {background: #d8e9ff}
+
+.editor-content :is(fieldset, #confirmation, #pollform, .results, details) {
+  min-width: 0;
+  margin: 0;
+  padding: clamp(14px, 3vw, 20px);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+}
+
+.editor-content :is(.row, .sectionbar) {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-content .sectionbar {flex-wrap: wrap; margin-bottom: 12px}
+.editor-content .sectionbar :is(h2, h3) {margin: 0}
+.editor-content #caseview {margin-top: 20px}
+.editor-content .photo {justify-content: flex-start; flex-wrap: wrap}
+.editor-content label {font-weight: 600}
+.editor-content small, .editor-content .meta {color: var(--muted); font-variant-numeric: tabular-nums}
+.editor-content #count {flex-shrink: 0}
+
+.editor-content :is(textarea, select, input:not([type=file])) {
+  display: block;
+  width: 100%;
+  margin: 7px 0 14px;
+  padding: 11px 12px;
+  border: 1px solid var(--editor-border);
+  border-radius: 10px;
+  color: inherit;
+  background: var(--editor-field);
+  font: inherit;
+}
+
+.editor-content textarea {min-height: 110px; resize: vertical}
+.editor-content #body {min-height: 145px}
+.editor-content :is(textarea, input)::placeholder {color: #9ea8b7}
+.editor-content :is(textarea, select, input, summary):focus-visible,
+.editor-content .attach:focus-within {outline: 2px solid var(--blue); outline-offset: 3px}
+.editor-content .attach {display: inline-flex; align-items: center; position: relative; overflow: hidden}
+.editor-content .attach input {cursor: pointer; position: absolute; inset: 0; width: 100%; opacity: 0}
+.editor-content #review, .editor-content #next {margin-top: 12px}
+.editor-content .actions, .editor-content .pollgrid {display: grid; gap: 12px}
+.editor-content figure {margin: 12px 0}
+.editor-content img {display: block; max-width: 100%; max-height: 320px; border-radius: 12px}
+.editor-content :is(.copy, .casebody) {white-space: pre-wrap}
+.editor-content details + details {margin-top: 10px}
+.editor-content summary {min-height: 44px; align-content: center; cursor: pointer; font-weight: 600}
+.editor-content .item {padding: 12px 0; border-top: 1px solid var(--line)}
+.editor-content .item h3 {margin: 0 0 4px}
+.editor-content meter {display: block; width: 100%; margin: 4px 0 10px; accent-color: var(--blue)}
+.editor-content meter::-webkit-meter-bar {background: #2b3543; border: 0}
+.editor-content meter::-webkit-meter-optimum-value {background: var(--blue)}
+#editor-workspace [role=status] {color: var(--blue)}
+#editor-workspace [role=status]:empty {display: none}
+
+@media (min-width: 580px) {
+  .editor-tabs {grid-template-columns: repeat(4, minmax(0, 1fr))}
+  .editor-content .actions {grid-template-columns: 1fr 1.4fr}
+}
+
+@media (min-width: 680px) {
+  .editor-content .pollgrid {grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start}
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .editor-content > section:not([hidden]) {animation: editor-enter .24s ease-out both}
+  @keyframes editor-enter {
+    from {opacity: 0; transform: translateY(5px)}
+  }
+}

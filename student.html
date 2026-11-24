@@ -7,6 +7,7 @@
 <meta name="theme-color" content="#101114">
 <title>Одеський ліцей №86</title>
 <link rel="stylesheet" href="/game/assets/inter.css">
+<link rel="stylesheet" href="/app/assets/editor.css">
 <script defer src="https://telegram.org/js/telegram-web-app.js"></script>
 <script defer src="/game/assets/gsap.min.js"></script>
 <style>
@@ -127,7 +128,7 @@ nav{bottom:calc(8px + var(--safe-bottom));width:min(calc(100% - 24px - var(--saf
 }
 </style>
 </head>
-<body>
+<body data-initial-page="{{ initial_page }}">
 <div class="launch-screen"><p class="launch-motto">Будуємо <em>майбутнє</em></p></div>
 <div class="shell">
 <header>
@@ -184,6 +185,7 @@ nav{bottom:calc(8px + var(--safe-bottom));width:min(calc(100% - 24px - var(--saf
  </form>
  <div class="receipt" hidden role="status">Звернення прийнято. Збережіть приватний код для перевірки статусу.<code></code><button class="action" id="new-case">Нове звернення</button></div>
 </section>
+{% include "editor.html" %}
 <p id="notice" role="status"></p>
 </main>
 </div>
@@ -228,6 +230,7 @@ const pages={
  feedback:['Скарги та пропозиції','Напишіть редакції ліцею.','',[]],
  polls:['Опитування','Оберіть відповідь, щоб проголосувати.','',[]],
  status:['Статус звернення','Введіть код, який отримали після надсилання.','',[]],
+ editor:['Редакція','','',[]],
  home:['Вітаємо!','Ваш особистий простір ліцею','Сервіси ліцею',['polls','feedback','status','subscribe']],
  community:['Спільнота','Голосуйте та звертайтеся до редакції.','Участь у житті ліцею',['polls','feedback','status']],
  profile:['Мій профіль','Ваша активність у боті ліцею.','Керування підпискою',['subscribe','unsubscribe']]
@@ -235,6 +238,23 @@ const pages={
 const notice=document.querySelector('#notice');
 const form=document.querySelector('#case-form');
 const receipt=document.querySelector('.receipt');
+const editorWorkspace=document.querySelector('#editor-workspace');
+let editorAccess, editorLoading=false;
+async function openEditor(){
+ if(editorLoading)return;
+ editorLoading=true;
+ try{
+   if(!editorAccess){
+     const {initializeEditor}=await import('/app/assets/editor.js');
+     editorAccess=initializeEditor(editorWorkspace,authHeaders);
+   }
+   await editorAccess();
+ }catch{
+   editorWorkspace.querySelector('#editor-access').textContent='Не вдалося завантажити редакцію. Відкрийте її ще раз.';
+ }finally{
+   editorLoading=false;
+ }
+}
 function privacyNote(){
  document.querySelector('#privacy-note').textContent=form.elements.kind.value==='anonymous'
    ? 'Редактори отримають лише текст. Для анонімності не вказуйте свої контакти.'
@@ -242,11 +262,14 @@ function privacyNote(){
 }
 form.addEventListener('change',privacyNote);
 privacyNote();
-function studentRequest(path,options={}){
- return fetch('/app/api/'+path,{...options,headers:{
+function authHeaders(){
+ return {
    'X-Student-Launch':launch,
    'X-Telegram-Init-Data':window.Telegram?.WebApp?.initData||''
- }});
+ };
+}
+function studentRequest(path,options={}){
+ return fetch('/app/api/'+path,{...options,headers:authHeaders()});
 }
 async function requestData(path, fields){
  const options=fields?{method:'POST',body:new URLSearchParams(fields)}:{};
@@ -346,19 +369,25 @@ function displayProfile(profile){
  document.querySelector('#stats-note').textContent='';
 }
 function render(focus){
- const key=Object.hasOwn(pages,location.hash.slice(1))?location.hash.slice(1):'home';
+ const route=location.hash.slice(1);
+ const key=Object.hasOwn(pages,route)?route:document.body.dataset.initialPage;
  const [title,intro,section,items]=pages[key];
  feedRequest?.abort();photos.forEach(url=>URL.revokeObjectURL(url));photos=[];
  document.querySelector('#feed').hidden=key!=='news';
  document.querySelector('#case-view').hidden=key!=='feedback';
  document.querySelector('#poll-view').hidden=key!=='polls';
  document.querySelector('#lookup-view').hidden=key!=='status';
+ const enteringEditor=key==='editor'&&editorWorkspace.hidden;
+ editorWorkspace.hidden=key!=='editor';
+ if(enteringEditor)openEditor();
  document.querySelector('#section-title').hidden=!section;
  if(key==='news')loadNews();
  if(key==='polls')loadPolls();
- const heading=document.querySelector('h1');
+ const heading=document.querySelector('#heading');
  heading.textContent=title;
- document.querySelector('.intro').textContent=intro;
+ const subtitle=document.querySelector('.intro');
+ subtitle.textContent=intro;
+ subtitle.hidden=!intro;
  document.querySelector('.feature').hidden=key!=='home';
  document.querySelector('#profile-stats').hidden=key!=='profile';
  if(key==='profile')requestData('profile').then(displayProfile).catch(error=>{
@@ -372,7 +401,7 @@ function render(focus){
    return '<button class="tile" data-action="'+id+'"><i class="tile-icon">'+icon(glyph,true)+'</i><span>'+label+(hint?'<small>'+hint+'</small>':'')+'</span></button>';
  }).join('');
  document.querySelectorAll('nav a').forEach((link,index)=>{
-   const parent=key==='news'?'home':['feedback','polls','status'].includes(key)?'community':key;
+   const parent=key==='news'||key==='editor'?'home':['feedback','polls','status'].includes(key)?'community':key;
    if(link.hash==='#'+parent){
      link.setAttribute('aria-current','page');
      link.parentElement.style.setProperty('--tab-position',(index*100)+'%');
@@ -409,8 +438,8 @@ addEventListener('DOMContentLoaded',()=>{
    const button=event.target.closest('[data-action]');
    if(!button)return;
    const action=button.dataset.action;
-   if(['news','feedback','polls','status'].includes(action)){location.hash=action;return}
-   if(action==='editor'||action==='game'){location.assign(action==='editor'?'/':'/game/');return}
+   if(['news','feedback','polls','status','editor'].includes(action)){location.hash=action;return}
+   if(action==='game'){location.assign('/game/');return}
    const controls=[...document.querySelectorAll('[data-action=subscribe],[data-action=unsubscribe]')];
    controls.forEach(control=>control.disabled=true);
    try{
