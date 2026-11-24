@@ -67,12 +67,15 @@ class Multiplayer(unittest.TestCase):
         self.assertEqual(client.get("/game/api/lobby",headers=headers).json["me"],"1")
         self.assertEqual(client.get("/api/editor",headers=headers).status_code,403)
 
-    def test_admin_only_game(self):
-        self.call(8, "lobby", status=403)
-        self.call(8, "rooms", dict(action="create", private=False, mode="quick"), 403)
-        ticket = self.app.test_client().get("/game/api/lobby", headers={"X-Telegram-Init-Data":signed(1)}).headers["X-Game-Session"]
-        revoked = create_panel(self.path, TOKEN, {2}, None).test_client()
-        self.assertEqual(revoked.get("/game/api/lobby", headers={"X-Game-Session":ticket}).status_code, 403)
+    def test_readers_can_play_together(self):
+        self.assertEqual(self.call(8, "lobby")["me"], "8")
+        room = self.call(8, "rooms", dict(action="create", private=True, mode="quick"))
+        joined = self.call(9, "rooms", dict(action="join", code=room["code"]))
+        started = self.call(8, "rooms/"+room["code"], dict(action="start", version=joined["version"]))
+        self.assertNotEqual(started["phase"], "waiting")
+        client = self.app.test_client()
+        self.assertEqual(client.get("/game/api/lobby").status_code, 403)
+        self.assertEqual(client.get("/api/editor", headers={"X-Telegram-Init-Data":signed(8)}).status_code, 403)
 
     def test_private_capacity_auth_and_restart(self):
         self.create(True, 6)

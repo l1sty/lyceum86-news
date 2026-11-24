@@ -224,7 +224,7 @@ try{
  if(launch)sessionStorage.setItem('school-launch',launch);
  else launch=sessionStorage.getItem('school-launch')||'';
 }catch{}
-let staff=params.get('editor')==='1'?['editor','game']:[];
+let staff=params.get('editor')==='1'?['editor']:[];
 const pages={
  news:['Останні новини','Оголошення редакції ліцею.','',[]],
  feedback:['Скарги та пропозиції','Напишіть редакції ліцею.','',[]],
@@ -395,7 +395,7 @@ function render(focus){
  });
  document.querySelector('#section-title').textContent=section;
  notice.textContent='';
- const visibleItems=['home','community'].includes(key)?[...items,...staff]:items;
+ const visibleItems=['home','community'].includes(key)?[...items,...staff,'game']:items;
  document.querySelector('.grid').innerHTML=visibleItems.map(id=>{
    const [glyph,label,hint]=actions[id];
    return '<button class="tile" data-action="'+id+'"><i class="tile-icon">'+icon(glyph,true)+'</i><span>'+label+(hint?'<small>'+hint+'</small>':'')+'</span></button>';
@@ -430,7 +430,7 @@ addEventListener('DOMContentLoaded',()=>{
  render(false);
  if(launch||tg?.initData)requestData('profile').then(profile=>{
    if(profile.editor&&!staff.length){
-     staff=['editor','game'];
+     staff=['editor'];
      if(['','#home','#community'].includes(location.hash))render(false);
    }
  }).catch(()=>{});

@@ -262,10 +262,10 @@ def handle(db, update, admin_ids):
     if command == "/start":
         invite = parts[1].removeprefix("room_") if len(parts) == 2 and parts[1].startswith("room_") else ""
         if len(invite) == 10 and all(c in "0123456789ABCDEF" for c in invite):
-            if is_editor and panel_url().startswith("https://"):
+            if panel_url().startswith("https://"):
                 db.execute("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,7)", (chat, invite))
             else:
-                reply("Запрошення доступне адміністраторам через HTTPS-застосунок.")
+                reply("Для гри потрібно підключити публічний HTTPS-домен.")
             return
         welcome = "Вітаємо у 86 News! Тут публікуємо шкільні новини. Перегляньте останні оголошення або підпишіться, щоб отримувати нові."
         if is_editor:
@@ -285,9 +285,7 @@ def handle(db, update, admin_ids):
         if not items:
             reply("Шкільних новин поки немає. Підпишіться, щоб отримати перше оголошення.")
     elif command == "/game" or text in GAME_LABELS:
-        if not is_editor:
-            reply("Гра доступна лише адміністраторам.")
-        elif panel_url().startswith("https://"):
+        if panel_url().startswith("https://"):
             db.execute("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,6)",
                        (chat, "Монополія · настільна гра для 2–6 учасників."))
         else:
@@ -340,7 +338,7 @@ def deliver(db, api, chat, body, kind, photo, admin_ids, token=None):
         db.execute("INSERT INTO poll_messages VALUES (?,?,?,?)",
                    (body, chat, message["message_id"], message["date"]))
         return
-    if kind in (2, 3, 6, 7) and chat not in admin_ids:
+    if kind in (2, 3) and chat not in admin_ids:
         return
     markup = feedback_keyboard(db, chat)
     if kind == 7:

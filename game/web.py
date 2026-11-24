@@ -52,7 +52,7 @@ def start_clock(database):
     threading.Thread(target=run, daemon=True, name="game-clock").start()
 
 
-def register(app, database, token, verify, admins, bot_username=None):
+def register(app, database, token, verify, bot_username=None):
     api = Blueprint("school_game", __name__)
     signer = URLSafeTimedSerializer(token, salt="school-game-v1")
     with closing(connect(database)) as db:
@@ -75,8 +75,6 @@ def register(app, database, token, verify, admins, bot_username=None):
                     g.user = signer.loads(ticket, max_age=86400)
                 except BadSignature:
                     return jsonify(error="Відкрийте гру через меню бота в Telegram."), 403
-            if g.user.get("id") not in admins:
-                return jsonify(error="Гра доступна лише адміністраторам."), 403
             g.uid = str(g.user["id"])
             if request.method == "POST" and not request.is_json:
                 return jsonify(error="Некоректний формат запиту."), 400

@@ -63,7 +63,7 @@ def create_panel(database, token, admins, publish, bot_username=None):
     app = Flask(__name__, template_folder="",
                 static_folder="editor_assets", static_url_path="/app/assets")
     from game.web import register
-    register(app, database, token, app_user, admins, bot_username)
+    register(app, database, token, app_user, bot_username)
     app.config["MAX_CONTENT_LENGTH"] = 9 * 1024 * 1024
 
     def page_cursor():
