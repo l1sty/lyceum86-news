@@ -260,6 +260,13 @@ def handle(db, update, admin_ids):
     """, (chat, message.get("date", now), int(command == "/start")))
 
     if command == "/start":
+        invite = parts[1].removeprefix("room_") if len(parts) == 2 and parts[1].startswith("room_") else ""
+        if len(invite) == 10 and all(c in "0123456789ABCDEF" for c in invite):
+            if is_editor and panel_url().startswith("https://"):
+                db.execute("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,7)", (chat, invite))
+            else:
+                reply("Запрошення доступне адміністраторам через HTTPS-застосунок.")
+            return
         welcome = "Вітаємо у 86 News! Тут публікуємо шкільні новини. Перегляньте останні оголошення або підпишіться, щоб отримувати нові."
         if is_editor:
             welcome += "\n\nСтатистика відвідувань — /stats."
@@ -333,10 +340,14 @@ def deliver(db, api, chat, body, kind, photo, admin_ids, token=None):
         db.execute("INSERT INTO poll_messages VALUES (?,?,?,?)",
                    (body, chat, message["message_id"], message["date"]))
         return
-    if kind in (2, 3, 6) and chat not in admin_ids:
+    if kind in (2, 3, 6, 7) and chat not in admin_ids:
         return
     markup = feedback_keyboard(db, chat)
-    if kind == 6:
+    if kind == 7:
+        url = panel_url().rstrip("/") + "/game/?" + urlencode({"join": body})
+        markup = {"inline_keyboard": [[{"text": "Приєднатися до кімнати", "web_app": {"url": url}}]]}
+        body = "Запрошення до гри «Монополія»."
+    elif kind == 6:
         markup = {"inline_keyboard": [[{"text": "Відкрити гру", "web_app": {"url": panel_url().rstrip("/") + "/game/"}}]]}
     elif kind == 3:
         markup = {"inline_keyboard": [[{"text": "Відкрити редакцію", "web_app": {"url": panel_url()}}]]}
@@ -473,7 +484,7 @@ def main(token=None, admin_text=None, status=print):
         initialize(db)
         from panel import create_panel
         from waitress import create_server
-        server = create_server(create_panel(database, token, admin_ids, publish), host="0.0.0.0",
+        server = create_server(create_panel(database, token, admin_ids, publish, me.get("username")), host="0.0.0.0",
                                port=int(os.getenv("PORT", "8080")), max_request_body_size=9*1024*1024)
         threading.Thread(target=server.run, daemon=True).start()
         from game.web import start_clock

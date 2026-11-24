@@ -60,10 +60,10 @@ def prepare_photo(upload):
         return output.getvalue()
 
 
-def create_panel(database, token, admins, publish):
+def create_panel(database, token, admins, publish, bot_username=None):
     app = Flask(__name__, static_folder=None)
     from game.web import register
-    register(app, database, token, app_user, admins)
+    register(app, database, token, app_user, admins, bot_username)
     app.config["MAX_CONTENT_LENGTH"] = 9 * 1024 * 1024
 
     def page_cursor():

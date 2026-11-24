@@ -330,7 +330,7 @@ function render(){
   $('#result').hidden=ph!=='finished';
   if(ph==='waiting'){title='Збір учасників';caption=room.players.length===1?'Запросіть ще одного гравця, щоб почати.':'Усі на місці? Ведучий може почати гру.';
     if(room.host===lobby.me)buttons+=btn('Почати гру','start',true,room.players.length<2);
-    buttons+=btn('Код кімнати','code-card')+btn('Вийти','leave');}
+    buttons+=btn('Запросити гравців','code-card')+btn('Вийти','leave');}
   else if(ph==='finished'){
     title='Підсумки партії';caption=modeName(room.mode)+' · Ходів зіграно: '+room.moves;
     if(resultKey!==room.winner){
@@ -378,13 +378,24 @@ function render(){
   renderPlayers(p);
   renderFeed();
 }
+let invitedRoom=new URLSearchParams(location.search).get('join');
 async function sync(){
   if(polling||busy||document.hidden)return;const generation=epoch;polling=true;
   try{
     if(room){const next=await api('rooms/'+room.code+'?v='+room.version);if(generation!==epoch)return;if(connectionFailed){connectionFailed=false;error()}if(!next)return;room=next;}
     else{const next=await api('lobby');if(generation!==epoch)return;lobby=next;board=lobby.board;$('main').hidden=false;$('#access-status').hidden=true;loadBoard();
       if(lobby.current){const resumed=await api('rooms/'+lobby.current);if(generation!==epoch)return;room=resumed}}
-    if(generation===epoch){render();error()}
+    if(generation===epoch){
+      render();error();
+      if(invitedRoom){
+        const code=invitedRoom;
+        invitedRoom=null;
+        if(/^[0-9A-F]{10}$/.test(code)&&room?.code!==code){
+          if(room)error('Вийдіть із поточної кімнати, перш ніж прийняти інше запрошення.');
+          else modal('<h2>Запрошення до кімнати '+esc(code)+'</h2><button class="primary" data-join="'+esc(code)+'">Приєднатися</button>');
+        }
+      }
+    }
   }catch(e){if(generation===epoch){if($('main').hidden)$('#access-status').textContent=e.message;connectionFailed=true;if(e.status===404){room=null;render()}error(e.message)}}finally{polling=false}
 }
 async function send(action,values={},enter=false){
@@ -394,7 +405,7 @@ async function send(action,values={},enter=false){
     render();if(enter||next.left)surface($(room?'#session':'#lobby'),{y:[8,0]});return true;
   }catch(e){error(e.message);return false}finally{busy=false;if(!room)void sync()}
 }
-document.addEventListener('click',e=>{
+document.addEventListener('click',async e=>{
   const b=e.target.closest('button');if(!b)return;
   if(b.dataset.tile!==undefined)detail(Number(b.dataset.tile));
   if(b.dataset.camera)scene?.camera(b.dataset.camera);
@@ -402,7 +413,18 @@ document.addEventListener('click',e=>{
   if(b.dataset.tab){const nav=b.closest('nav');nav.querySelector('.active')?.classList.remove('active');b.classList.add('active');
     if(nav.id==='room-tabs'){roomTab=b.dataset.tab;renderFeed()}else{lobbyTab=b.dataset.tab;renderLobby()}}
   if(b.dataset.act==='confirm-resign'){modal('<h2>Залишити партію?</h2><p>Ви втратите ділянки й вибудете з гри.</p>'+btn('Так, здатися','resign',true));return}
-  if(b.dataset.act==='code-card'){modal('<h2>Код кімнати</h2><p>Друзі можуть ввести цей код у грі через кнопку «За кодом».</p><input id="invite" aria-label="Код кімнати" readonly value="'+esc(room.code)+'">');$('#invite').select();return}
+  if(b.dataset.act==='code-card'){
+    const link=lobby.invite_base?lobby.invite_base+room.code:'';
+    modal('<h2>Запросити гравців</h2><p>Код кімнати · '+esc(room.code)+'</p>'+
+      (link?'<label>Посилання в Telegram<input id="invite" readonly value="'+esc(link)+'"></label><button data-act="copy-invite">Копіювати посилання</button><p id="invite-status" role="status"></p>':''));
+    return;
+  }
+  if(b.dataset.act==='copy-invite'){
+    const input=$('#invite'), status=$('#invite-status');
+    try{await navigator.clipboard.writeText(input.value);status.textContent='Посилання скопійовано.'}
+    catch{input.focus();input.select();status.textContent='Скопіюйте виділене посилання.'}
+    return;
+  }
   if(b.dataset.act){const a=b.dataset.act;send(a,a==='bid'?{amount:room.auction.amount+10}:a==='upgrade'?{tile:sheet.dataset.tile}:{})}
 });
 document.addEventListener('submit',async e=>{

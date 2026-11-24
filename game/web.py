@@ -52,7 +52,7 @@ def start_clock(database):
     threading.Thread(target=run, daemon=True, name="game-clock").start()
 
 
-def register(app, database, token, verify, admins):
+def register(app, database, token, verify, admins, bot_username=None):
     api = Blueprint("school_game", __name__)
     signer = URLSafeTimedSerializer(token, salt="school-game-v1")
     with closing(connect(database)) as db:
@@ -108,6 +108,7 @@ def register(app, database, token, verify, admins):
             member = db.execute("SELECT code FROM game_members WHERE uid=?", (g.uid,)).fetchone()
             leaders = db.execute("SELECT name,count(*) FROM game_wins GROUP BY uid ORDER BY count(*) DESC,uid LIMIT 20").fetchall()
         response = jsonify(me=g.uid, board=rules.BOARD, current=member and member[0], leaders=leaders,
+                           invite_base=f"https://t.me/{bot_username}?start=room_" if bot_username else None,
                            rooms=[dict(code=s["code"], name=s["players"][0]["name"], mode=s["mode"],
                                        size=len(s["players"])) for s in rooms if len(s["players"]) < 6])
         if verify(request.headers.get("X-Telegram-Init-Data", ""), token):
