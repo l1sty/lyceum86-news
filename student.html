@@ -127,6 +127,51 @@ nav{bottom:calc(8px + var(--safe-bottom));width:min(calc(100% - 24px - var(--saf
  .shell{padding-bottom:calc(84px + var(--safe-bottom))}
 }
 </style>
+<script>
+const themeColors={
+ red:['Червоний',355], orange:['Помаранчевий',27], yellow:['Жовтий',48],
+ green:['Зелений',140], sky:['Блакитний',194], blue:['Синій',216],
+ violet:['Фіолетовий',270], pink:['Рожевий',328]
+};
+function applyTheme(key){
+ if(!Object.hasOwn(themeColors,key))key='blue';
+ document.documentElement.dataset.theme=key;
+ document.documentElement.style.setProperty('--hue',themeColors[key][1]);
+}
+let initialTheme='blue';
+try{initialTheme=localStorage.getItem('lyceum-theme')||'blue'}catch{}
+applyTheme(initialTheme);
+</script>
+<style>
+:root[data-theme]{
+ --blue:hsl(var(--hue) 88% 79%);--tint:hsl(var(--hue) 75% 87%);
+ --deep:hsl(var(--hue) 40% 17%);--mid:hsl(var(--hue) 43% 29%);
+ --edge:hsl(var(--hue) 32% 39%);--glaze:linear-gradient(145deg,var(--mid),var(--deep));
+ --bg:hsl(var(--hue) 12% 7%);--card:hsl(var(--hue) 12% 11%);
+}
+.brand,.tile-icon,.metrics div,.feature,#editor-workspace .editor-tabs button[aria-pressed=true]{
+ background:var(--glaze);border-color:var(--edge);color:var(--tint)
+}
+.feature{background:linear-gradient(110deg,var(--deep),var(--mid))}
+.feature small,.metrics dd,header strong span,.launch-motto em,.receipt code{color:var(--blue)}
+.feature::after{-webkit-text-stroke-color:hsl(var(--hue) 65% 72% / .3)}
+.feature stop{stop-color:var(--blue)}
+.feature span,.action,#editor-workspace .primary,#editor-workspace .primary:enabled:hover{background:var(--tint);color:#15171a}
+.brand [fill],.tile-icon path[fill],.tile-icon circle[fill]{fill:var(--mid)}
+.tile-icon .accent,.brand path:nth-child(2){fill:var(--blue)}
+.brand [stroke],.tile-icon [stroke]{stroke:var(--blue)}
+.launch-screen{background:radial-gradient(ellipse at 65% 42%,var(--mid),var(--deep) 50%,var(--bg) 88%)}
+nav::before{background:var(--glaze);box-shadow:inset 0 0 0 1px var(--edge)}
+nav a[aria-current=page] svg{color:var(--tint);fill:var(--mid)}
+.poll-option[aria-pressed=true]{background:var(--deep)}
+.palette{margin:20px 0;border:0;padding:0}.palette legend{font-weight:600;margin-bottom:10px}
+.swatches{display:flex;flex-wrap:wrap;gap:4px}
+.swatches label{position:relative;display:grid;place-items:center;width:44px;height:44px;cursor:pointer}
+.swatches input{position:absolute;opacity:0}
+.swatches span{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:hsl(var(--sample) 78% 67%);color:#101114}
+.swatches input:checked+span::before{content:'✓';font-weight:800}
+.swatches input:focus-visible+span{outline:2px solid white;outline-offset:3px}
+</style>
 </head>
 <body data-initial-page="{{ initial_page }}">
 <div class="launch-screen"><p class="launch-motto">Будуємо <em>майбутнє</em></p></div>
@@ -161,6 +206,7 @@ nav{bottom:calc(8px + var(--safe-bottom));width:min(calc(100% - 24px - var(--saf
  <small><i data-icon="news"></i> Інформаційний центр</small><strong>Оголошення ліцею</strong><span>Читати новини</span>
 </button>
 <section id="profile-stats" hidden aria-labelledby="stats-title">
+ <fieldset class="palette"><legend>Колір теми · <output id="theme-name"></output></legend><div class="swatches"></div></fieldset>
  <h2 id="stats-title">Моя статистика</h2>
  <dl class="metrics">
   <div><dt>Опитування з моїм голосом</dt><dd id="poll-count">—</dd></div>
@@ -236,6 +282,23 @@ const pages={
  profile:['Мій профіль','Ваша активність у боті ліцею.','Керування підпискою',['subscribe','unsubscribe']]
 };
 const notice=document.querySelector('#notice');
+const themeName=document.querySelector('#theme-name');
+for(const [key,[name,hue]] of Object.entries(themeColors)){
+ const label=document.createElement('label');
+ label.title=name;
+ label.style.setProperty('--sample',hue);
+ const radio=document.createElement('input');
+ radio.type='radio';radio.name='theme';radio.value=key;
+ radio.setAttribute('aria-label',name);
+ radio.checked=key===document.documentElement.dataset.theme;
+ if(radio.checked)themeName.textContent=name;
+ radio.onchange=()=>{
+   applyTheme(key);themeName.textContent=name;
+   try{localStorage.setItem('lyceum-theme',key)}catch{}
+ };
+ const swatch=document.createElement('span');swatch.setAttribute('aria-hidden','true');
+ label.append(radio,swatch);document.querySelector('.swatches').append(label);
+}
 const form=document.querySelector('#case-form');
 const receipt=document.querySelector('.receipt');
 const editorWorkspace=document.querySelector('#editor-workspace');
