@@ -30,6 +30,7 @@ dialog.querySelector('.dialog-head').addEventListener('submit',e=>{e.preventDefa
 function error(message=''){const el=$('#error');el.textContent=message;el.hidden=!message}
 async function api(path,data){
   const options={headers:{'X-Telegram-Init-Data':tg?.initData||'','X-Game-Session':ticket},cache:'no-store'};
+  try{options.headers['X-Student-Launch']=sessionStorage.getItem('school-launch')||''}catch{}
   if(AbortSignal.timeout)options.signal=AbortSignal.timeout(12000);
   if(data){options.method='POST';options.headers['Content-Type']='application/json';options.body=JSON.stringify(data)}
   let r;try{r=await fetch('/game/api/'+path,options)}catch{throw Error('Зв’язок перервано. Відновлюємо з’єднання…')}
@@ -40,7 +41,7 @@ async function api(path,data){
   if(!r.ok){if(r.status===403){$('main').hidden=true;$('#access-status').hidden=false;$('#access-status').textContent=result.error}const err=Error(result.error||'Не вдалося виконати дію.');err.status=r.status;throw err}
   return result;
 }
-function modal(html,section='Місто',refreshing=false){
+function modal(html,section='Монополія',refreshing=false){
   const opening=!dialog.open;
   const reversing=closingSheet;
   closingSheet=false;

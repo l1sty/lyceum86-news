@@ -27,7 +27,8 @@ TRACK = "Статус звернення"
 POLLS = "Опитування"
 POLL_BROADCAST = 4
 POLL_REQUEST = 5
-GAME = "Місто"
+GAME = "Монополія"
+GAME_LABELS = (GAME, "Місто")
 APP_ACTIONS = {"news": NEWS, "polls": POLLS, "feedback": FEEDBACK, "status": TRACK,
                "subscribe": ON, "unsubscribe": OFF, "editor": EDITOR, "game": GAME}
 MENU = {"keyboard": [[NEWS, POLLS], [FEEDBACK, TRACK], [ON, OFF]], "resize_keyboard": True}
@@ -163,7 +164,7 @@ def handle_feedback(db, chat, text, command, admin_ids, reply):
         return True
     if not row:
         return False
-    if text == CANCEL or command.startswith("/") or text in (NEWS, ON, OFF, POLLS, EDITOR, GAME):
+    if text == CANCEL or command.startswith("/") or text in (NEWS, ON, OFF, POLLS, EDITOR, *GAME_LABELS):
         db.execute("DELETE FROM feedback_flow WHERE chat=?", (chat,))
         if text == CANCEL or command == "/cancel":
             reply("Звернення скасовано.")
@@ -213,6 +214,25 @@ def save_case(db, chat, header, text, admin_ids):
     return code
 
 
+def change_subscription(db, chat, subscribed):
+    if subscribed:
+        db.execute("INSERT OR IGNORE INTO subscribers VALUES (?)", (chat,))
+    else:
+        db.execute("DELETE FROM subscribers WHERE chat=?", (chat,))
+        db.execute("DELETE FROM deliveries WHERE chat=? AND broadcast IN (1,4)", (chat,))
+
+
+def audience_stats(db, now):
+    total, day, week, starters = db.execute("""
+        SELECT COUNT(*), COUNT(CASE WHEN last_seen >= ? THEN 1 END),
+               COUNT(CASE WHEN last_seen >= ? THEN 1 END),
+               COUNT(CASE WHEN starts > 0 THEN 1 END)
+        FROM audience
+    """, (now - 86400, now - 7 * 86400)).fetchone()
+    subscribers = db.execute("SELECT COUNT(*) FROM subscribers").fetchone()[0]
+    return dict(total=total, day=day, week=week, starters=starters, subscribers=subscribers)
+
+
 def handle(db, update, admin_ids):
     message = update.get("message", {})
     if message.get("chat", {}).get("type") != "private":
@@ -246,11 +266,10 @@ def handle(db, update, admin_ids):
             welcome += "\n\nЩоб опублікувати новину, надішліть /post і текст оголошення одним повідомленням."
         reply(welcome)
     elif text in (ON, "/subscribe"):
-        db.execute("INSERT OR IGNORE INTO subscribers VALUES (?)", (chat,))
+        change_subscription(db, chat, True)
         reply("Підписку увімкнено. Нові оголошення надходитимуть сюди.")
     elif text in (OFF, "/unsubscribe"):
-        db.execute("DELETE FROM subscribers WHERE chat=?", (chat,))
-        db.execute("DELETE FROM deliveries WHERE chat=? AND broadcast IN (1,4)", (chat,))
+        change_subscription(db, chat, False)
         reply("Підписку вимкнено. Новини залишаються доступними в меню.")
     elif text in (NEWS, "/news"):
         items = db.execute("SELECT body,photo FROM news ORDER BY id DESC LIMIT 3").fetchall()
@@ -258,12 +277,12 @@ def handle(db, update, admin_ids):
             reply(body, photo)
         if not items:
             reply("Шкільних новин поки немає. Підпишіться, щоб отримати перше оголошення.")
-    elif command == "/game" or text == GAME:
+    elif command == "/game" or text in GAME_LABELS:
         if not is_editor:
             reply("Гра доступна лише адміністраторам.")
         elif panel_url().startswith("https://"):
             db.execute("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,6)",
-                       (chat, "Місто · настільна гра для 2–6 учасників."))
+                       (chat, "Монополія · настільна гра для 2–6 учасників."))
         else:
             reply("Для гри потрібно підключити публічний HTTPS-домен.")
     elif command == "/admin" or text == EDITOR:
@@ -286,13 +305,7 @@ def handle(db, update, admin_ids):
         if not is_editor:
             reply("Статистика доступна лише редактору. Щоб дізнатися свій Telegram ID, надішліть /id.")
             return
-        total, day, week, starters = db.execute("""
-            SELECT COUNT(*), COUNT(CASE WHEN last_seen >= ? THEN 1 END),
-                   COUNT(CASE WHEN last_seen >= ? THEN 1 END),
-                   COUNT(CASE WHEN starts > 0 THEN 1 END)
-            FROM audience
-        """, (now - 86400, now - 7 * 86400)).fetchone()
-        subscribers = db.execute("SELECT COUNT(*) FROM subscribers").fetchone()[0]
+        total, day, week, starters, subscribers = audience_stats(db, now).values()
         reply(f"📊 Статистика 86 News\n\n"
               f"Усього користувачів від початку обліку — {total}\n"
               f"Активні за останні 24 години — {day}\n"
@@ -328,17 +341,15 @@ def deliver(db, api, chat, body, kind, photo, admin_ids, token=None):
     elif kind == 3:
         markup = {"inline_keyboard": [[{"text": "Відкрити редакцію", "web_app": {"url": panel_url()}}]]}
     elif markup is MENU and panel_url().startswith("https://"):
-        polls, subscribed = db.execute("""
-            SELECT (SELECT COUNT(*) FROM votes WHERE voter=?),
-                   EXISTS(SELECT 1 FROM subscribers WHERE chat=?)
-        """, (chat, chat)).fetchone()
-        profile = {"polls": polls, "sub": subscribed, "at": int(time.time())}
+        profile = {}
         if token:
             profile["launch"] = URLSafeTimedSerializer(token, salt="student-app").dumps(chat)
         if chat in admin_ids:
             profile["editor"] = 1
-        url = panel_url().rstrip("/") + "/app/?" + urlencode(profile)
-        markup = {"keyboard": [[{"text": "Launch mini app", "web_app": {"url": url}}]],
+        url = panel_url().rstrip("/") + "/app/"
+        if profile:
+            url += "?" + urlencode(profile)
+        markup = {"keyboard": [[{"text": "Почати", "web_app": {"url": url}}]],
                   "resize_keyboard": True, "is_persistent": True}
     elif chat in admin_ids and markup is MENU:
         markup = dict(MENU, keyboard=MENU["keyboard"] + [[EDITOR, GAME]])

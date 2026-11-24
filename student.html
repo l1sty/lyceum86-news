@@ -96,6 +96,11 @@ nav{bottom:calc(8px + var(--safe-bottom));width:min(calc(100% - 24px - var(--saf
 #case-form label{display:grid;gap:6px;margin-bottom:14px;font-weight:600}
 #case-form select,#case-form textarea{width:100%;font:inherit;border:1px solid #455266;border-radius:10px;padding:12px;background:#141a22;color:inherit}
 #case-form textarea{resize:vertical}.action{padding:12px 17px;background:#bdd9ff;color:#152942;font-weight:650;border:0;border-radius:12px}
+.action:disabled{opacity:.55}
+#lookup-form label{display:grid;gap:8px;margin-bottom:12px}
+#lookup-form input{width:100%;font:inherit;padding:12px;border:1px solid #455266;border-radius:10px;background:#141a22;color:inherit}
+.poll-option{display:block;width:100%;min-height:44px;margin-top:8px;text-align:left;padding:10px;border:1px solid var(--line);border-radius:10px;background:#141a22;overflow-wrap:anywhere}
+.poll-option[aria-pressed=true]{border-color:var(--blue);background:#243952}
 .receipt code{display:block;color:#bdd9ff;font-size:1.15rem;margin:12px 0}
 @media(max-width:480px){
  header{padding-block:13px;gap:10px}
@@ -160,9 +165,15 @@ nav{bottom:calc(8px + var(--safe-bottom));width:min(calc(100% - 24px - var(--saf
   <div><dt>Підписка на новини</dt><dd id="subscription">—</dd></div>
  </dl>
  <p id="stats-note"></p>
+ <p id="telegram-id" hidden></p>
 </section>
 <h2 id="section-title"></h2><div class="grid"></div>
 <div id="feed" hidden aria-live="polite"></div>
+<div id="poll-view" hidden></div>
+<section id="lookup-view" hidden>
+ <form id="lookup-form" class="post"><label>Приватний код<input name="code" maxlength="16" required autocomplete="off" spellcheck="false"></label><button class="action">Перевірити статус</button></form>
+ <div id="case-result" class="post" role="status" hidden></div>
+</section>
 <section id="case-view" hidden>
  <form id="case-form">
   <label>Тип звернення<select name="kind"><option value="anonymous">Анонімна скарга</option><option value="signed">Скарга з підписом</option><option value="idea">Пропозиція з підписом</option></select></label>
@@ -202,14 +213,22 @@ document.querySelectorAll('[data-icon]').forEach(el=>el.innerHTML=icon(el.datase
 const actions={
  news:['news','Останні новини'],polls:['polls','Опитування'],feedback:['feedback','Скарги та пропозиції'],status:['status','Статус звернення'],
  subscribe:['bell','Підписатися','Отримувати оголошення'],unsubscribe:['mute','Відписатися','Вимкнути розсилку'],
- editor:['editor','Редакція'],game:['game','Місто']
+ editor:['editor','Редакція'],game:['game','Монополія']
 };
-const staff=new URLSearchParams(location.search).get('editor')==='1'?['editor','game']:[];
+const params=new URLSearchParams(location.search);
+let launch=params.get('launch')||'';
+try{
+ if(launch)sessionStorage.setItem('school-launch',launch);
+ else launch=sessionStorage.getItem('school-launch')||'';
+}catch{}
+let staff=params.get('editor')==='1'?['editor','game']:[];
 const pages={
  news:['Останні новини','Оголошення редакції ліцею.','',[]],
  feedback:['Скарги та пропозиції','Напишіть редакції ліцею.','',[]],
- home:['Вітаємо!','Ваш особистий простір ліцею','Сервіси ліцею',['polls','feedback','status','subscribe',...staff]],
- community:['Спільнота','Голосуйте та звертайтеся до редакції.','Участь у житті ліцею',['polls','feedback','status',...staff]],
+ polls:['Опитування','Оберіть відповідь, щоб проголосувати.','',[]],
+ status:['Статус звернення','Введіть код, який отримали після надсилання.','',[]],
+ home:['Вітаємо!','Ваш особистий простір ліцею','Сервіси ліцею',['polls','feedback','status','subscribe']],
+ community:['Спільнота','Голосуйте та звертайтеся до редакції.','Участь у житті ліцею',['polls','feedback','status']],
  profile:['Мій профіль','Ваша активність у боті ліцею.','Керування підпискою',['subscribe','unsubscribe']]
 };
 const notice=document.querySelector('#notice');
@@ -224,10 +243,53 @@ form.addEventListener('change',privacyNote);
 privacyNote();
 function studentRequest(path,options={}){
  return fetch('/app/api/'+path,{...options,headers:{
-   'X-Student-Launch':new URLSearchParams(location.search).get('launch')||'',
+   'X-Student-Launch':launch,
    'X-Telegram-Init-Data':window.Telegram?.WebApp?.initData||''
  }});
 }
+async function requestData(path, fields){
+ const options=fields?{method:'POST',body:new URLSearchParams(fields)}:{};
+ const response=await studentRequest(path,options);
+ const data=await response.json();
+ if(!response.ok)throw new Error(data.error||'Дія тимчасово недоступна.');
+ return data;
+}
+async function loadPolls(){
+ const view=document.querySelector('#poll-view');
+ view.textContent='Завантажуємо опитування…';
+ try{
+   const {items}=await requestData('polls');
+   view.textContent=items.length?'':'Активних опитувань поки немає.';
+   for(const poll of items){
+     const card=document.createElement('article');card.className='post';card.textContent=poll.question;
+     poll.options.forEach((option,choice)=>{
+       const button=document.createElement('button');button.className='poll-option';
+       button.textContent=option;button.setAttribute('aria-pressed',choice===poll.choice);
+       button.onclick=async()=>{
+         const buttons=card.querySelectorAll('button');
+         buttons.forEach(item=>item.disabled=true);
+         try{
+           const {message}=await requestData('polls',{poll:poll.id,choice});
+           buttons.forEach(item=>item.setAttribute('aria-pressed',item===button));
+           notice.textContent=message;
+         }catch(error){notice.textContent=error.message}
+         finally{buttons.forEach(item=>item.disabled=false)}
+       };
+       card.append(button);
+     });
+     view.append(card);
+   }
+ }catch(error){view.textContent=error.message}
+}
+document.querySelector('#lookup-form').onsubmit=async event=>{
+ event.preventDefault();
+ const result=document.querySelector('#case-result');
+ result.hidden=false;result.textContent='Перевіряємо статус…';
+ try{
+   const {state,answer}=await requestData('status',{code:event.currentTarget.elements.code.value});
+   result.textContent=answer?state+'\n\n'+answer:state;
+ }catch(error){result.textContent=error.message}
+};
 let feedRequest;
 let photos=[];
 async function loadNews(){
@@ -268,24 +330,19 @@ form.addEventListener('submit',async event=>{
    const result=await response.json();
    if(!response.ok){notice.textContent=result.error;return}
    receipt.querySelector('code').textContent=result.code;receipt.hidden=false;form.hidden=true;
+   document.querySelector('#lookup-form').elements.code.value=result.code;
  }catch{notice.textContent='Не вдалося підтвердити надсилання. Спробуйте ще раз.'}
  finally{form.querySelector('button').disabled=false}
 });
 document.querySelector('#new-case').onclick=()=>{
  nonce=null;form.reset();privacyNote();receipt.hidden=true;form.hidden=false;
 };
-function displayProfile(){
- const params=new URLSearchParams(location.search);
- const available=['polls','at'].every(key=>/^\d{1,12}$/.test(params.get(key))) && ['0','1'].includes(params.get('sub'));
- const note=document.querySelector('#stats-note');
- if(!available){
-   note.textContent='Надішліть /start у чаті бота й відкрийте профіль кнопкою Launch mini app, щоб побачити свої дані.';
-   return;
- }
- document.querySelector('#poll-count').textContent=params.get('polls');
- document.querySelector('#subscription').textContent=params.get('sub')==='1'?'Активна':'Вимкнена';
- const updated=new Date(Number(params.get('at'))*1000).toLocaleString('uk-UA',{dateStyle:'short',timeStyle:'short'});
- note.textContent='Оновлено '+updated+'. Щоб отримати свіжі дані, надішліть /start у чаті.';
+function displayProfile(profile){
+ document.querySelector('#poll-count').textContent=profile.polls;
+ document.querySelector('#subscription').textContent=profile.subscribed?'Активна':'Вимкнена';
+ const id=document.querySelector('#telegram-id');
+ id.textContent='Telegram ID · '+profile.id;id.hidden=false;
+ document.querySelector('#stats-note').textContent='';
 }
 function render(focus){
  const key=Object.hasOwn(pages,location.hash.slice(1))?location.hash.slice(1):'home';
@@ -293,22 +350,28 @@ function render(focus){
  feedRequest?.abort();photos.forEach(url=>URL.revokeObjectURL(url));photos=[];
  document.querySelector('#feed').hidden=key!=='news';
  document.querySelector('#case-view').hidden=key!=='feedback';
+ document.querySelector('#poll-view').hidden=key!=='polls';
+ document.querySelector('#lookup-view').hidden=key!=='status';
  document.querySelector('#section-title').hidden=!section;
  if(key==='news')loadNews();
+ if(key==='polls')loadPolls();
  const heading=document.querySelector('h1');
  heading.textContent=title;
  document.querySelector('.intro').textContent=intro;
  document.querySelector('.feature').hidden=key!=='home';
  document.querySelector('#profile-stats').hidden=key!=='profile';
- if(key==='profile')displayProfile();
+ if(key==='profile')requestData('profile').then(displayProfile).catch(error=>{
+   document.querySelector('#stats-note').textContent=error.message;
+ });
  document.querySelector('#section-title').textContent=section;
  notice.textContent='';
- document.querySelector('.grid').innerHTML=items.map(id=>{
+ const visibleItems=['home','community'].includes(key)?[...items,...staff]:items;
+ document.querySelector('.grid').innerHTML=visibleItems.map(id=>{
    const [glyph,label,hint]=actions[id];
    return '<button class="tile" data-action="'+id+'"><i class="tile-icon">'+icon(glyph,true)+'</i><span>'+label+(hint?'<small>'+hint+'</small>':'')+'</span></button>';
  }).join('');
  document.querySelectorAll('nav a').forEach((link,index)=>{
-   const parent=key==='news'?'home':key==='feedback'?'community':key;
+   const parent=key==='news'?'home':['feedback','polls','status'].includes(key)?'community':key;
    if(link.hash==='#'+parent){
      link.setAttribute('aria-current','page');
      link.parentElement.style.setProperty('--tab-position',(index*100)+'%');
@@ -335,15 +398,26 @@ addEventListener('DOMContentLoaded',()=>{
  const tg=window.Telegram?.WebApp;
  tg?.ready();tg?.expand();
  render(false);
- document.addEventListener('click',event=>{
+ if(launch||tg?.initData)requestData('profile').then(profile=>{
+   if(profile.editor&&!staff.length){
+     staff=['editor','game'];
+     if(['','#home','#community'].includes(location.hash))render(false);
+   }
+ }).catch(()=>{});
+ document.addEventListener('click',async event=>{
    const button=event.target.closest('[data-action]');
    if(!button)return;
-   if(['news','feedback'].includes(button.dataset.action)){location.hash=button.dataset.action;return}
-   if(!tg?.platform||tg.platform==='unknown'){
-     notice.textContent='Відкрийте простір кнопкою в чаті бота, щоб виконати цю дію.';
-     notice.scrollIntoView({block:'nearest'});return;
-   }
-   tg.sendData(button.dataset.action);
+   const action=button.dataset.action;
+   if(['news','feedback','polls','status'].includes(action)){location.hash=action;return}
+   if(action==='editor'||action==='game'){location.assign(action==='editor'?'/':'/game/');return}
+   const controls=[...document.querySelectorAll('[data-action=subscribe],[data-action=unsubscribe]')];
+   controls.forEach(control=>control.disabled=true);
+   try{
+     const profile=await requestData('profile',{action});
+     displayProfile(profile);
+     notice.textContent=profile.subscribed?'Підписку увімкнено.':'Підписку вимкнено.';
+   }catch(error){notice.textContent=error.message}
+   finally{controls.forEach(control=>control.disabled=false)}
  });
 });
 addEventListener('hashchange',()=>render(true));

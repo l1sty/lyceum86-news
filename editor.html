@@ -55,8 +55,8 @@ p.copy,.casebody{white-space:pre-wrap;overflow-wrap:anywhere}figure{margin:16px 
 @media(prefers-reduced-motion:reduce){button,.attach{transition:none}}
 </style>
 <main>
-<header><span class="brand"><b>86</b> News</span><a href="/game/" style="color:inherit">Місто</a><small>Редакція ліцею<br><time id="date"></time></small></header>
-<div class="desk"><nav aria-label="Розділи редакції"><button data-view="postview" aria-current="true">Публікації</button><button data-view="pollview" disabled>Опитування</button><button data-view="caseview" disabled>Звернення</button></nav>
+<header><span class="brand"><b>86</b> News</span><a href="/app/" style="color:inherit">До ліцею</a><a href="/game/" style="color:inherit">Монополія</a><small>Редакція ліцею<br><time id="date"></time></small></header>
+<div class="desk"><nav aria-label="Розділи редакції"><button data-view="postview" aria-current="true">Публікації</button><button data-view="pollview" disabled>Опитування</button><button data-view="caseview" disabled>Звернення</button><button data-view="statsview" disabled>Статистика</button></nav>
 <div class="workarea"><section id="postview">
 <h1 id="title">Нова публікація</h1>
 <fieldset id="composer" disabled>
@@ -78,12 +78,14 @@ p.copy,.casebody{white-space:pre-wrap;overflow-wrap:anywhere}figure{margin:16px 
 <button class="primary">Опублікувати опитування</button><p id="pollmsg" role="status" class="notice"></p></form>
 <div class="results"><div class="sectionbar"><h2>Результати</h2><button data-refresh="polls">Оновити</button></div><div id="pollsList"></div><p id="pollsError" class="notice" role="status"></p><button id="pollsMore" hidden>Показати ще</button></div></div></section>
 <section id="caseview" hidden><div class="sectionbar"><h1>Звернення</h1><button data-refresh="cases">Оновити список</button></div><div id="casesList"></div><p id="casesError" class="notice" role="status"></p><button id="casesMore" hidden>Показати ще</button></section>
+<section id="statsview" hidden><h1>Статистика аудиторії</h1><dl id="audience-stats"></dl><p id="stats-message" role="status"></p></section>
 </div></div>
 </main>
 <script>
 const el = id => document.getElementById(id);
 const app = window.Telegram?.WebApp;
 const headers = {'X-Telegram-Init-Data': app?.initData || ''};
+try {headers['X-Student-Launch']=sessionStorage.getItem('school-launch')||''} catch {}
 let nonce, url;
 app?.ready(); app?.expand();
 function update() {
@@ -175,7 +177,21 @@ for (const tab of tabs) tab.onclick = () => {
   }
   if (tab.dataset.view === 'pollview') loadList('polls');
   if (tab.dataset.view === 'caseview' && !pages.cases) loadList('cases');
+  if (tab.dataset.view === 'statsview') loadStats();
 };
+async function loadStats(){
+  const list=el('audience-stats'), message=el('stats-message');
+  list.replaceChildren();
+  message.textContent='Завантажуємо статистику…';
+  try{
+    const stats=await call({},'/api/stats');
+    for(const [key,label] of Object.entries({total:'Усього користувачів',day:'Активні за 24 години',week:'Активні за 7 днів',starters:'Запускали бота через /start',subscribers:'Підписники'})){
+      node('dt',label,list);
+      node('dd',String(stats[key]),list);
+    }
+    message.textContent='';
+  }catch(error){message.textContent=error.message}
+}
 function node(name, text, parent, klass) {
   const child = document.createElement(name);
   if (text !== undefined) child.textContent = text;

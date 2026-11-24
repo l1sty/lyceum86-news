@@ -34,9 +34,16 @@ def telegram_user(raw, token):
         return None
 
 
-def editor_id(raw, token, admins):
+def app_user(raw, token):
     user = telegram_user(raw, token)
-    return user["id"] if user and user["id"] in admins else None
+    if user:
+        return user
+    try:
+        uid = URLSafeTimedSerializer(token, salt="student-app").loads(
+            request.headers.get("X-Student-Launch", ""), max_age=7*86400)
+    except BadData:
+        return None
+    return {"id": uid} if type(uid) is int else None
 
 
 def prepare_photo(upload):
@@ -56,7 +63,7 @@ def prepare_photo(upload):
 def create_panel(database, token, admins, publish):
     app = Flask(__name__, static_folder=None)
     from game.web import register
-    register(app, database, token, telegram_user, admins)
+    register(app, database, token, app_user, admins)
     app.config["MAX_CONTENT_LENGTH"] = 9 * 1024 * 1024
 
     def page_cursor():
@@ -66,20 +73,17 @@ def create_panel(database, token, admins, publish):
 
     @app.before_request
     def authorize():
+        raw = request.headers.get("X-Telegram-Init-Data", "")
         if request.path.startswith("/app/api/"):
-            user = telegram_user(request.headers.get("X-Telegram-Init-Data", ""), token)
-            if user:
-                g.student = user["id"]
-            else:
-                try:
-                    g.student = URLSafeTimedSerializer(token, salt="student-app").loads(
-                        request.headers.get("X-Student-Launch", ""), max_age=7*86400)
-                except BadData:
-                    return jsonify(error="Для доступу відкрийте застосунок через нову кнопку після /start."), 403
+            user = app_user(raw, token)
+            if not user:
+                return jsonify(error="Для доступу відкрийте застосунок через нову кнопку після /start."), 403
+            g.student = user["id"]
         if request.path.startswith("/api/"):
-            g.editor = editor_id(request.headers.get("X-Telegram-Init-Data", ""), token, admins)
-            if g.editor is None:
+            user = app_user(raw, token)
+            if not user or user["id"] not in admins:
                 return jsonify(error="Відкрийте редакцію через /admin з облікового запису редактора."), 403
+            g.editor = user["id"]
 
     @app.after_request
     def cache_policy(response):
@@ -95,6 +99,56 @@ def create_panel(database, token, admins, publish):
             rows = db.execute("SELECT id,body,photo FROM news ORDER BY id DESC LIMIT 3")
             return jsonify(items=[dict(id=i, body=body.removeprefix("📰 86 News\n\n"), photo=bool(photo))
                                   for i, body, photo in rows])
+
+    @app.route("/app/api/profile", methods=["GET", "POST"])
+    def student_profile():
+        from bot import change_subscription
+        with closing(sqlite3.connect(database, timeout=15)) as db, db:
+            db.execute("""INSERT INTO audience VALUES (?, ?, 0)
+                          ON CONFLICT(chat) DO UPDATE SET last_seen=MAX(last_seen,excluded.last_seen)""",
+                       (g.student, int(time.time())))
+            if request.method == "POST":
+                action = request.form.get("action")
+                if action not in ("subscribe", "unsubscribe"):
+                    return jsonify(error="Невідома дія."), 400
+                change_subscription(db, g.student, action == "subscribe")
+            polls, subscribed = db.execute("""
+                SELECT (SELECT COUNT(*) FROM votes WHERE voter=?),
+                       EXISTS(SELECT 1 FROM subscribers WHERE chat=?)
+            """, (g.student, g.student)).fetchone()
+        return jsonify(id=g.student, polls=polls, subscribed=bool(subscribed), editor=g.student in admins)
+
+    @app.post("/app/api/status")
+    def student_status():
+        code = request.form.get("code", "").strip().upper()
+        with closing(sqlite3.connect(database)) as db:
+            row = db.execute("SELECT state,answer FROM cases WHERE code=?", (code,)).fetchone()
+        if not row:
+            return jsonify(error="Звернення за цим кодом не знайдено."), 404
+        return jsonify(state=row[0], answer=row[1])
+
+    @app.route("/app/api/polls", methods=["GET", "POST"])
+    def student_polls():
+        with closing(sqlite3.connect(database, timeout=15)) as db, db:
+            if request.method == "POST":
+                from bot import record_vote
+                message = record_vote(db, {"from": {"id": g.student},
+                                           "data": f"vote:{request.form.get('poll')}:{request.form.get('choice')}"})
+                if not message.startswith("Ваш голос зараховано:"):
+                    return jsonify(error=message), 400
+                return jsonify(message=message)
+            rows = db.execute("""
+                SELECT p.id,p.question,p.options,v.choice FROM active_polls p
+                LEFT JOIN votes v ON p.id=v.poll AND v.voter=? ORDER BY p.id DESC LIMIT 5
+            """, (g.student,)).fetchall()
+        return jsonify(items=[dict(id=i, question=q, options=json.loads(options), choice=choice)
+                              for i,q,options,choice in rows])
+
+    @app.get("/api/stats")
+    def editor_stats():
+        from bot import audience_stats
+        with closing(sqlite3.connect(database)) as db:
+            return jsonify(audience_stats(db, int(time.time())))
 
     @app.get("/app/api/news/<int:news_id>/photo")
     def student_photo(news_id):
