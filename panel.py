@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 import sqlite3
 import time
+import requests
+from itsdangerous import URLSafeTimedSerializer, BadData
 from urllib.parse import parse_qsl
 from uuid import UUID
 
@@ -64,6 +66,16 @@ def create_panel(database, token, admins, publish):
 
     @app.before_request
     def authorize():
+        if request.path.startswith("/app/api/"):
+            user = telegram_user(request.headers.get("X-Telegram-Init-Data", ""), token)
+            if user:
+                g.student = user["id"]
+            else:
+                try:
+                    g.student = URLSafeTimedSerializer(token, salt="student-app").loads(
+                        request.headers.get("X-Student-Launch", ""), max_age=7*86400)
+                except BadData:
+                    return jsonify(error="Для доступу відкрийте застосунок через нову кнопку після /start."), 403
         if request.path.startswith("/api/"):
             g.editor = editor_id(request.headers.get("X-Telegram-Init-Data", ""), token, admins)
             if g.editor is None:
@@ -71,9 +83,64 @@ def create_panel(database, token, admins, publish):
 
     @app.after_request
     def cache_policy(response):
-        if request.path.startswith("/api/"):
+        if request.path.startswith(("/api/", "/app/api/")):
             response.headers["Cache-Control"] = "no-store"
+        if request.path.startswith("/app/"):
+            response.headers["Referrer-Policy"] = "no-referrer"
         return response
+
+    @app.get("/app/api/news")
+    def student_news():
+        with closing(sqlite3.connect(database)) as db:
+            rows = db.execute("SELECT id,body,photo FROM news ORDER BY id DESC LIMIT 3")
+            return jsonify(items=[dict(id=i, body=body.removeprefix("📰 86 News\n\n"), photo=bool(photo))
+                                  for i, body, photo in rows])
+
+    @app.get("/app/api/news/<int:news_id>/photo")
+    def student_photo(news_id):
+        if news_id >= 2**63:
+            return "", 404
+        with closing(sqlite3.connect(database)) as db:
+            row = db.execute("SELECT p.data,p.file_id FROM news n JOIN photos p ON n.photo=p.id WHERE n.id=?",
+                             (news_id,)).fetchone()
+        if not row:
+            return "", 404
+        data, file_id = row
+        if not data and file_id:
+            try:
+                meta = requests.post(f"https://api.telegram.org/bot{token}/getFile", json={"file_id":file_id}, timeout=10)
+                meta.raise_for_status()
+                path = meta.json()["result"]["file_path"]
+                photo = requests.get(f"https://api.telegram.org/file/bot{token}/{path}", timeout=15)
+                photo.raise_for_status()
+                data = photo.content
+            except (requests.RequestException, KeyError, ValueError):
+                return "", 502
+        return send_file(io.BytesIO(data), mimetype="image/jpeg") if data else ("", 404)
+
+    @app.post("/app/api/feedback")
+    def student_feedback():
+        from bot import ANONYMOUS, SIGNED, IDEA, save_case
+        if not admins:
+            return jsonify(error="Прийом звернень поки недоступний."), 503
+        kinds = {"anonymous":ANONYMOUS, "signed":SIGNED, "idea":IDEA}
+        kind = request.form.get("kind", "")
+        text = request.form.get("text", "").strip()
+        if kind not in kinds or not text or len(text.encode("utf-16-le")) // 2 > 3900:
+            return jsonify(error="Оберіть тип звернення і введіть текст до 3900 знаків."), 400
+        try:
+            nonce = UUID(request.form.get("nonce", ""))
+        except ValueError:
+            return jsonify(error="Некоректний номер запиту."), 400
+        receipt = hmac.new(token.encode(), f"case:{g.student}:{nonce}".encode(), hashlib.sha256).hexdigest()
+        with closing(sqlite3.connect(database, timeout=15)) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT code FROM student_receipts WHERE receipt=?", (receipt,)).fetchone()
+            if row:
+                return jsonify(code=row[0])
+            code = save_case(db, g.student, kinds[kind], text, admins)
+            db.execute("INSERT INTO student_receipts VALUES (?,?)", (receipt, code))
+        return jsonify(code=code)
 
     @app.route("/api/polls", methods=["GET", "POST"])
     def polls():

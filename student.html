@@ -2,6 +2,7 @@
 <html lang="uk">
 <head>
 <meta charset="utf-8">
+<meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#101114">
 <title>Одеський ліцей №86</title>
@@ -90,6 +91,12 @@ nav a[aria-current=page] svg{color:#bedbff;fill:#46658c}
 .shell{padding-block:var(--safe-top) calc(108px + var(--safe-bottom));padding-inline:max(clamp(16px,4vw,32px),calc(var(--safe-side) + 8px))}
 nav{bottom:calc(8px + var(--safe-bottom));width:min(calc(100% - 24px - var(--safe-side) * 2),520px)}
 .tile span,.metrics dd{min-width:0;overflow-wrap:anywhere}
+.post,#case-form,.receipt{padding:18px;margin:12px 0;background:var(--card);border:1px solid var(--line);border-radius:16px}
+.post{white-space:pre-wrap;overflow-wrap:anywhere}.post img{display:block;width:100%;height:auto;margin-top:12px;border-radius:10px}
+#case-form label{display:grid;gap:6px;margin-bottom:14px;font-weight:600}
+#case-form select,#case-form textarea{width:100%;font:inherit;border:1px solid #455266;border-radius:10px;padding:12px;background:#141a22;color:inherit}
+#case-form textarea{resize:vertical}.action{padding:12px 17px;background:#bdd9ff;color:#152942;font-weight:650;border:0;border-radius:12px}
+.receipt code{display:block;color:#bdd9ff;font-size:1.15rem;margin:12px 0}
 @media(max-width:480px){
  header{padding-block:13px;gap:10px}
  h1{margin-top:20px}
@@ -155,6 +162,16 @@ nav{bottom:calc(8px + var(--safe-bottom));width:min(calc(100% - 24px - var(--saf
  <p id="stats-note"></p>
 </section>
 <h2 id="section-title"></h2><div class="grid"></div>
+<div id="feed" hidden aria-live="polite"></div>
+<section id="case-view" hidden>
+ <form id="case-form">
+  <label>Тип звернення<select name="kind"><option value="anonymous">Анонімна скарга</option><option value="signed">Скарга з підписом</option><option value="idea">Пропозиція з підписом</option></select></label>
+  <p id="privacy-note"></p>
+  <label>Ваше повідомлення<textarea name="text" rows="5" maxlength="3900" required></textarea></label>
+  <button class="action" type="submit">Надіслати редакції</button>
+ </form>
+ <div class="receipt" hidden role="status">Звернення прийнято. Збережіть приватний код для перевірки статусу.<code></code><button class="action" id="new-case">Нове звернення</button></div>
+</section>
 <p id="notice" role="status"></p>
 </main>
 </div>
@@ -189,11 +206,74 @@ const actions={
 };
 const staff=new URLSearchParams(location.search).get('editor')==='1'?['editor','game']:[];
 const pages={
+ news:['Останні новини','Оголошення редакції ліцею.','',[]],
+ feedback:['Скарги та пропозиції','Напишіть редакції ліцею.','',[]],
  home:['Вітаємо!','Ваш особистий простір ліцею','Сервіси ліцею',['polls','feedback','status','subscribe',...staff]],
  community:['Спільнота','Голосуйте та звертайтеся до редакції.','Участь у житті ліцею',['polls','feedback','status',...staff]],
  profile:['Мій профіль','Ваша активність у боті ліцею.','Керування підпискою',['subscribe','unsubscribe']]
 };
 const notice=document.querySelector('#notice');
+const form=document.querySelector('#case-form');
+const receipt=document.querySelector('.receipt');
+function privacyNote(){
+ document.querySelector('#privacy-note').textContent=form.elements.kind.value==='anonymous'
+   ? 'Редактори отримають лише текст. Для анонімності не вказуйте свої контакти.'
+   : 'Редактори отримають текст і ваш Telegram ID.';
+}
+form.addEventListener('change',privacyNote);
+privacyNote();
+function studentRequest(path,options={}){
+ return fetch('/app/api/'+path,{...options,headers:{
+   'X-Student-Launch':new URLSearchParams(location.search).get('launch')||'',
+   'X-Telegram-Init-Data':window.Telegram?.WebApp?.initData||''
+ }});
+}
+let feedRequest;
+let photos=[];
+async function loadNews(){
+ const feed=document.querySelector('#feed');
+ const controller=feedRequest=new AbortController();
+ const options={signal:controller.signal};
+ feed.textContent='Завантажуємо новини…';
+ try{
+   const response=await studentRequest('news',options);
+   const data=await response.json();
+   if(!response.ok)throw new Error(data.error);
+   feed.textContent=data.items.length?'':'Оголошень поки немає.';
+   for(const item of data.items){
+     const article=document.createElement('article');article.className='post';article.textContent=item.body;
+     feed.append(article);
+     if(item.photo){
+       try{
+         const result=await studentRequest('news/'+item.id+'/photo',options);
+         if(!result.ok)throw new Error();
+         const blob=await result.blob();
+         if(controller.signal.aborted)return;
+         const url=URL.createObjectURL(blob);photos.push(url);
+         const img=document.createElement('img');img.alt='Фото до оголошення';img.src=url;article.append(img);
+       }catch(error){if(controller.signal.aborted)return;article.append(document.createTextNode('\nФото тимчасово недоступне.'))}
+     }
+   }
+ }catch(error){if(!controller.signal.aborted)feed.textContent=error.message?.startsWith('Для доступу')?error.message:'Не вдалося завантажити новини. Відкрийте стрічку ще раз.'}
+}
+let nonce;
+form.addEventListener('submit',async event=>{
+ event.preventDefault();
+ if(form.querySelector('button').disabled)return;
+ const data=new FormData(form);
+ nonce=nonce||crypto.randomUUID();data.set('nonce',nonce);
+ form.querySelector('button').disabled=true;notice.textContent='';
+ try{
+   const response=await studentRequest('feedback',{method:'POST',body:data});
+   const result=await response.json();
+   if(!response.ok){notice.textContent=result.error;return}
+   receipt.querySelector('code').textContent=result.code;receipt.hidden=false;form.hidden=true;
+ }catch{notice.textContent='Не вдалося підтвердити надсилання. Спробуйте ще раз.'}
+ finally{form.querySelector('button').disabled=false}
+});
+document.querySelector('#new-case').onclick=()=>{
+ nonce=null;form.reset();privacyNote();receipt.hidden=true;form.hidden=false;
+};
 function displayProfile(){
  const params=new URLSearchParams(location.search);
  const available=['polls','at'].every(key=>/^\d{1,12}$/.test(params.get(key))) && ['0','1'].includes(params.get('sub'));
@@ -210,6 +290,11 @@ function displayProfile(){
 function render(focus){
  const key=Object.hasOwn(pages,location.hash.slice(1))?location.hash.slice(1):'home';
  const [title,intro,section,items]=pages[key];
+ feedRequest?.abort();photos.forEach(url=>URL.revokeObjectURL(url));photos=[];
+ document.querySelector('#feed').hidden=key!=='news';
+ document.querySelector('#case-view').hidden=key!=='feedback';
+ document.querySelector('#section-title').hidden=!section;
+ if(key==='news')loadNews();
  const heading=document.querySelector('h1');
  heading.textContent=title;
  document.querySelector('.intro').textContent=intro;
@@ -223,13 +308,14 @@ function render(focus){
    return '<button class="tile" data-action="'+id+'"><i class="tile-icon">'+icon(glyph,true)+'</i><span>'+label+(hint?'<small>'+hint+'</small>':'')+'</span></button>';
  }).join('');
  document.querySelectorAll('nav a').forEach((link,index)=>{
-   if(link.hash==='#'+key){
+   const parent=key==='news'?'home':key==='feedback'?'community':key;
+   if(link.hash==='#'+parent){
      link.setAttribute('aria-current','page');
      link.parentElement.style.setProperty('--tab-position',(index*100)+'%');
    }else link.removeAttribute('aria-current');
  });
  if(focus){window.scrollTo(0,0);heading.focus({preventScroll:true})}
- if(window.gsap&&!matchMedia('(prefers-reduced-motion: reduce)').matches){
+ if(items.length&&window.gsap&&!matchMedia('(prefers-reduced-motion: reduce)').matches){
    gsap.from('.tile',{opacity:0,y:7,duration:.26,stagger:.025,ease:'power2.out',clearProps:'transform,opacity'});
  }
 }
@@ -252,6 +338,7 @@ addEventListener('DOMContentLoaded',()=>{
  document.addEventListener('click',event=>{
    const button=event.target.closest('[data-action]');
    if(!button)return;
+   if(['news','feedback'].includes(button.dataset.action)){location.hash=button.dataset.action;return}
    if(!tg?.platform||tg.platform==='unknown'){
      notice.textContent='Відкрийте простір кнопкою в чаті бота, щоб виконати цю дію.';
      notice.scrollIntoView({block:'nearest'});return;

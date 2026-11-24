@@ -7,6 +7,7 @@ import time
 import threading
 import secrets
 import requests
+from itsdangerous import URLSafeTimedSerializer
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -108,6 +109,7 @@ def initialize(db):
         CREATE INDEX IF NOT EXISTS poll_messages_sent ON poll_messages(sent);
         CREATE TABLE IF NOT EXISTS votes (poll INTEGER, voter INTEGER, choice INTEGER, PRIMARY KEY(poll,voter));
         CREATE TABLE IF NOT EXISTS submissions (editor INTEGER, nonce TEXT, PRIMARY KEY(editor,nonce));
+        CREATE TABLE IF NOT EXISTS student_receipts (receipt TEXT PRIMARY KEY, code TEXT NOT NULL);
     """)
     for table in ("news", "deliveries"):
         if "photo" not in {row[1] for row in db.execute(f"PRAGMA table_info({table})")}:
@@ -195,7 +197,12 @@ def handle_feedback(db, chat, text, command, admin_ids, reply):
     if not admin_ids:
         reply("Прийом звернень поки недоступний.")
         return True
-    header = row[0]
+    code = save_case(db, chat, row[0], text, admin_ids)
+    reply(f"Звернення прийнято. Ваш приватний код:\n{code}\n\nЗбережіть його для кнопки «Статус звернення». За кодом можна прочитати відповідь.")
+    return True
+
+
+def save_case(db, chat, header, text, admin_ids):
     if header != ANONYMOUS:
         header += f"\nTelegram ID автора — {chat}"
     body = f"{header}\n\n{text}"
@@ -203,8 +210,7 @@ def handle_feedback(db, chat, text, command, admin_ids, reply):
     case_id = db.execute("INSERT INTO cases(code,body) VALUES (?,?)", (code, body)).lastrowid
     db.executemany("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,2)",
                    [(editor, f"Звернення №{case_id}\n{body}") for editor in admin_ids])
-    reply(f"Звернення прийнято. Ваш приватний код:\n{code}\n\nЗбережіть його для кнопки «Статус звернення». За кодом можна прочитати відповідь.")
-    return True
+    return code
 
 
 def handle(db, update, admin_ids):
@@ -303,7 +309,7 @@ def handle(db, update, admin_ids):
         reply("Оберіть дію в меню або надішліть /start.")
 
 
-def deliver(db, api, chat, body, kind, photo, admin_ids):
+def deliver(db, api, chat, body, kind, photo, admin_ids, token=None):
     if kind in (POLL_BROADCAST, POLL_REQUEST):
         row = db.execute("SELECT question,options FROM active_polls WHERE id=?", (body,)).fetchone()
         if row is None:
@@ -327,6 +333,8 @@ def deliver(db, api, chat, body, kind, photo, admin_ids):
                    EXISTS(SELECT 1 FROM subscribers WHERE chat=?)
         """, (chat, chat)).fetchone()
         profile = {"polls": polls, "sub": subscribed, "at": int(time.time())}
+        if token:
+            profile["launch"] = URLSafeTimedSerializer(token, salt="student-app").dumps(chat)
         if chat in admin_ids:
             profile["editor"] = 1
         url = panel_url().rstrip("/") + "/app/?" + urlencode(profile)
@@ -343,7 +351,7 @@ def deliver(db, api, chat, body, kind, photo, admin_ids):
     else:
         data, = db.execute("SELECT data FROM photos WHERE id=?", (photo,)).fetchone()
         result = api("sendPhoto", chat_id=chat, caption=body, photo=data, reply_markup=markup)
-        db.execute("UPDATE photos SET file_id=?, data=NULL WHERE id=?", (result["photo"][-1]["file_id"], photo))
+        db.execute("UPDATE photos SET file_id=? WHERE id=?", (result["photo"][-1]["file_id"], photo))
 
 
 def record_vote(db, callback):
@@ -379,7 +387,7 @@ def remove_poll_messages(db, api):
             db.execute("DELETE FROM poll_messages WHERE chat=? AND message=?", (chat, message))
 
 
-def run(db, api, admin_ids):
+def run(db, api, admin_ids, token=None):
     while True:
         try:
             pos = db.execute("SELECT pos FROM cursor_state").fetchone()[0]
@@ -402,7 +410,7 @@ def run(db, api, admin_ids):
             remove_poll_messages(db, api)
             for row, chat, body, kind, photo in db.execute("SELECT id,chat,body,broadcast,photo FROM deliveries ORDER BY id LIMIT 20").fetchall():
                 try:
-                    deliver(db, api, chat, body, kind, photo, admin_ids)
+                    deliver(db, api, chat, body, kind, photo, admin_ids, token)
                 except ApiError as error:
                     if error.code not in (400, 403):
                         raise
@@ -485,7 +493,7 @@ def main(token=None, admin_text=None, status=print):
             if retry_at is not None:
                 break
         status(f"86 News працює: https://t.me/{me['username']}")
-        run(db, api, admin_ids)
+        run(db, api, admin_ids, token)
 
 
 if __name__ == "__main__":
