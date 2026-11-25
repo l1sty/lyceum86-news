@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="/app/assets/editor.css">
 <script defer src="https://telegram.org/js/telegram-web-app.js"></script>
 <script defer src="/game/assets/gsap.min.js"></script>
+<script defer src="/app/assets/valentines.js"></script>
 <style>
 *{box-sizing:border-box} :root{color-scheme:dark;--bg:#101114;--card:#191b20;--line:#30333a;--muted:#b1b5bf;--blue:#94bcff}
 body{margin:0;background:var(--bg);color:#f5f6f9;font:1rem/1.45 Inter,system-ui,sans-serif}
@@ -74,8 +75,8 @@ h2{font-size:1.06rem;letter-spacing:-.025em;margin:24px 0 12px}
  @keyframes bell-swing{25%{transform:rotate(13deg)}55%{transform:rotate(-9deg)}80%{transform:rotate(4deg)}}
 }
 button{transition:transform .14s ease,background-color .18s}.tile:hover{background:#21252c}button:active{transform:scale(.98)}
-nav{position:fixed;bottom:calc(10px + env(safe-area-inset-bottom));inset-inline:0;margin:auto;width:min(calc(100% - 24px),520px);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:5px;z-index:2;isolation:isolate;border:1px solid #36404e;border-radius:23px;background:#191e26f5;box-shadow:0 8px 26px #0006,inset 0 1px #ffffff09}
-nav::before{content:"";position:absolute;z-index:-1;inset:5px auto 5px 5px;width:calc((100% - 10px)/3);border-radius:18px;background:linear-gradient(155deg,#304c70,#233349);box-shadow:inset 0 0 0 1px #6b94c145;transform:translateX(var(--tab-position,0%))}
+nav{position:fixed;bottom:calc(10px + env(safe-area-inset-bottom));inset-inline:0;margin:auto;width:min(calc(100% - 24px),520px);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:5px;z-index:2;isolation:isolate;border:1px solid #36404e;border-radius:23px;background:#191e26f5;box-shadow:0 8px 26px #0006,inset 0 1px #ffffff09}
+nav::before{content:"";position:absolute;z-index:-1;inset:5px auto 5px 5px;width:calc((100% - 10px)/4);border-radius:18px;background:linear-gradient(155deg,#304c70,#233349);box-shadow:inset 0 0 0 1px #6b94c145;transform:translateX(var(--tab-position,0%))}
 nav a{display:grid;justify-items:center;align-content:center;gap:3px;min-height:52px;text-decoration:none;color:#b5bfce;font-size:.82rem;font-weight:550;border-radius:18px}
 nav i{display:grid;place-items:center}nav svg{width:21px;height:21px;fill:#293342}
 nav a:hover,nav a:focus-visible{color:#e2ecfb}nav a[aria-current=page]{color:#e5efff;font-weight:650}
@@ -101,6 +102,14 @@ nav{bottom:calc(8px + var(--safe-bottom));width:min(calc(100% - 24px - var(--saf
 .action:disabled{opacity:.55}
 #lookup-form label{display:grid;gap:8px;margin-bottom:12px}
 #lookup-form input{width:100%;font:inherit;padding:12px;border:1px solid #455266;border-radius:10px;background:#141a22;color:inherit}
+#val-view .post{white-space:normal}
+#val-view .val-letter{white-space:pre-wrap;margin:6px 0 0}
+#val-view label{display:grid;gap:6px;margin:10px 0;font-weight:600}
+#val-view input,#val-view textarea{width:100%;font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px}
+#val-view textarea{resize:vertical}
+#val-view .val-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#val-view .val-secondary{min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--blue)}
+#val-view time{color:var(--muted);font-size:.85rem}
 .poll-option{display:block;width:100%;min-height:44px;margin-top:8px;text-align:left;padding:10px;border:1px solid var(--line);border-radius:10px;background:#141a22;overflow-wrap:anywhere}
 .poll-option[aria-pressed=true]{border-color:var(--blue);background:#243952}
 .receipt code{display:block;color:#bdd9ff;font-size:1.15rem;margin:12px 0}
@@ -218,6 +227,28 @@ nav a[aria-current=page] svg{color:var(--tint);fill:var(--mid)}
 <h2 id="section-title"></h2><div class="grid"></div>
 <div id="feed" hidden aria-live="polite"></div>
 <div id="poll-view" hidden></div>
+<section id="val-view" hidden>
+ <form class="post" id="val-compose">
+  <h2>Написати валентинку</h2>
+  <label>Посилання або код отримувача<input name="recipient" required autocomplete="off" spellcheck="false"></label>
+  <label>Ваша валентинка<textarea name="letter" rows="4" maxlength="1000" required></textarea></label>
+  <button class="action">Надіслати без підпису</button>
+  <span id="val-sent" role="status"></span>
+ </form>
+ <h2>Моя скринька</h2>
+ <div class="post">
+  <p id="val-help">Поділіться посиланням, щоб отримати валентинки від друзів.</p>
+  <label id="val-address" hidden>Адреса скриньки<input readonly id="val-link"></label>
+  <div class="val-actions">
+   <button type="button" class="action" id="val-toggle" disabled>Відкрити скриньку</button>
+   <button type="button" class="val-secondary" id="val-copy" hidden>Скопіювати</button>
+  </div>
+  <span role="status" id="val-status"></span>
+ </div>
+ <div class="val-actions"><h2>Отримані валентинки</h2><button type="button" class="val-secondary" id="val-refresh">Оновити</button></div>
+ <div id="val-letters"></div>
+ <button type="button" class="val-secondary" id="val-more" hidden>Показати раніші</button>
+</section>
 <section id="lookup-view" hidden>
  <form id="lookup-form" class="post"><label>Приватний код<input name="code" maxlength="16" required autocomplete="off" spellcheck="false"></label><button class="action">Перевірити статус</button></form>
  <div id="case-result" class="post" role="status" hidden></div>
@@ -235,10 +266,11 @@ nav a[aria-current=page] svg{color:var(--tint);fill:var(--mid)}
 <p id="notice" role="status"></p>
 </main>
 </div>
-<nav aria-label="Основна навігація"><a href="#home"><i data-icon="home"></i>Головна</a><a href="#community"><i data-icon="users"></i>Спільнота</a><a href="#profile"><i data-icon="user"></i>Профіль</a></nav>
+<nav aria-label="Основна навігація"><a href="#home"><i data-icon="home"></i>Головна</a><a href="#community"><i data-icon="users"></i>Спільнота</a><a href="#entertainment"><i data-icon="game"></i>Розваги</a><a href="#profile"><i data-icon="user"></i>Профіль</a></nav>
 <noscript>Увімкніть JavaScript, щоб відкрити простір ліцею.</noscript>
 <script>
 const paths = {
+ heart:'M20.8 4.8a5.5 5.5 0 0 0-7.8 0L12 6l-1.1-1.2a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.4a5.5 5.5 0 0 0 0-7.8Z',
  bell:'M5 17h14l-2-3v-4a5 5 0 0 0-10 0v4l-2 3Zm5 3q2 2 4 0',
  news:'M5 4h15v15a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8h2Zm0 0v14m4-10h7m-7 4h7m-7 4h4',
  polls:'M4 4v16h16M8 15v-4m5 4V6m5 9V9',feedback:'M21 11a9 8 0 0 1-13 7l-5 2 1-5a9 8 0 1 1 17-4Z',
@@ -260,9 +292,10 @@ function icon(key,tile=false){
 }
 document.querySelectorAll('[data-icon]').forEach(el=>el.innerHTML=icon(el.dataset.icon));
 const actions={
+ valentines:['heart','Анонімні валентинки'],
  news:['news','Останні новини'],polls:['polls','Опитування'],feedback:['feedback','Скарги та пропозиції'],status:['status','Статус звернення'],
  subscribe:['bell','Підписатися','Отримувати оголошення'],unsubscribe:['mute','Відписатися','Вимкнути розсилку'],
- editor:['editor','Редакція'],game:['game','Монополія']
+ editor:['editor','Редакція'],game:['game','Монополія'],mafia:['users','Мафія']
 };
 const params=new URLSearchParams(location.search);
 let launch=params.get('launch')||'';
@@ -279,6 +312,8 @@ const pages={
  editor:['Редакція','','',[]],
  home:['Вітаємо!','Ваш особистий простір ліцею','Сервіси ліцею',['polls','feedback','status','subscribe']],
  community:['Спільнота','Голосуйте та звертайтеся до редакції.','Участь у житті ліцею',['polls','feedback','status']],
+ entertainment:['Розваги','','Ігри та валентинки',['mafia','game','valentines']],
+ valentines:['Анонімні валентинки','Отримувач побачить лише текст вашої валентинки.','',[]],
  profile:['Мій профіль','Ваша активність у боті ліцею.','Керування підпискою',['subscribe','unsubscribe']]
 };
 const notice=document.querySelector('#notice');
@@ -439,6 +474,8 @@ function render(focus){
  document.querySelector('#feed').hidden=key!=='news';
  document.querySelector('#case-view').hidden=key!=='feedback';
  document.querySelector('#poll-view').hidden=key!=='polls';
+ document.querySelector('#val-view').hidden=key!=='valentines';
+ if(key==='valentines')valentinesInbox.refresh();
  document.querySelector('#lookup-view').hidden=key!=='status';
  const enteringEditor=key==='editor'&&editorWorkspace.hidden;
  editorWorkspace.hidden=key!=='editor';
@@ -458,13 +495,13 @@ function render(focus){
  });
  document.querySelector('#section-title').textContent=section;
  notice.textContent='';
- const visibleItems=['home','community'].includes(key)?[...items,...staff,'game']:items;
+ const visibleItems=['home','community'].includes(key)?[...items,...staff]:items;
  document.querySelector('.grid').innerHTML=visibleItems.map(id=>{
    const [glyph,label,hint]=actions[id];
    return '<button class="tile" data-action="'+id+'"><i class="tile-icon">'+icon(glyph,true)+'</i><span>'+label+(hint?'<small>'+hint+'</small>':'')+'</span></button>';
  }).join('');
  document.querySelectorAll('nav a').forEach((link,index)=>{
-   const parent=key==='news'||key==='editor'?'home':['feedback','polls','status'].includes(key)?'community':key;
+   const parent=key==='news'||key==='editor'?'home':key==='valentines'?'entertainment':['feedback','polls','status'].includes(key)?'community':key;
    if(link.hash==='#'+parent){
      link.setAttribute('aria-current','page');
      link.parentElement.style.setProperty('--tab-position',(index*100)+'%');
@@ -475,7 +512,9 @@ function render(focus){
    gsap.from('.tile',{opacity:0,y:7,duration:.26,stagger:.025,ease:'power2.out',clearProps:'transform,opacity'});
  }
 }
+let valentinesInbox;
 addEventListener('DOMContentLoaded',()=>{
+ valentinesInbox=window.initializeValentines(requestData,params.get('to'));
  const grid=document.querySelector('.grid');
  function replayIcon(event){
    const tile=event.target.closest('.tile');
@@ -501,8 +540,12 @@ addEventListener('DOMContentLoaded',()=>{
    const button=event.target.closest('[data-action]');
    if(!button)return;
    const action=button.dataset.action;
-   if(['news','feedback','polls','status','editor'].includes(action)){location.hash=action;return}
+   if(['news','feedback','polls','status','editor','valentines'].includes(action)){location.hash=action;return}
    if(action==='game'){location.assign('/game/');return}
+   if(action==='mafia'){
+     if(!tg?.initData && tg?.platform && tg.platform!=='unknown'){tg.sendData('mafia');return}
+     location.assign('/mafia/');return
+   }
    const controls=[...document.querySelectorAll('[data-action=subscribe],[data-action=unsubscribe]')];
    controls.forEach(control=>control.disabled=true);
    try{

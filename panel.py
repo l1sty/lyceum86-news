@@ -64,6 +64,10 @@ def create_panel(database, token, admins, publish, bot_username=None):
                 static_folder="editor_assets", static_url_path="/app/assets")
     from game.web import register
     register(app, database, token, app_user, bot_username)
+    from mafia.web import register as register_mafia
+    register_mafia(app, database, token, telegram_user)
+    from valentines import register as register_valentines
+    register_valentines(app, database, token, bot_username)
     app.config["MAX_CONTENT_LENGTH"] = 9 * 1024 * 1024
 
     def page_cursor():
@@ -250,6 +254,8 @@ def create_panel(database, token, admins, publish, bot_username=None):
     @app.get("/app/")
     def student_app():
         initial_page = "editor" if request.path == "/" or request.args.get("view") == "editor" else "home"
+        if request.path == "/app/" and request.args.get("view") == "valentines":
+            initial_page = "valentines"
         return render_template("student.html", initial_page=initial_page)
 
     @app.route("/api/editor", methods=["GET", "POST"])

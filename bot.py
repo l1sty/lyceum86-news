@@ -7,6 +7,7 @@ import time
 import threading
 import secrets
 import requests
+from valentines import INVITE as VAL_INVITE, NEW_MAIL as VAL_NEW_MAIL
 from itsdangerous import URLSafeTimedSerializer
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -30,11 +31,11 @@ POLL_REQUEST = 5
 GAME = "Монополія"
 GAME_LABELS = (GAME, "Місто")
 APP_ACTIONS = {"news": NEWS, "polls": POLLS, "feedback": FEEDBACK, "status": TRACK,
-               "subscribe": ON, "unsubscribe": OFF, "editor": EDITOR, "game": GAME}
+               "subscribe": ON, "unsubscribe": OFF, "editor": EDITOR, "game": GAME, "mafia": "Мафія"}
 MENU = {"keyboard": [[NEWS, POLLS], [FEEDBACK, TRACK], [ON, OFF]], "resize_keyboard": True}
 COMMANDS = {"start": "Відкрити меню", "news": "Останні новини школи",
             "subscribe": "Підписатися на новини", "unsubscribe": "Скасувати підписку",
-            "id": "Дізнатися свій Telegram ID"}
+            "id": "Дізнатися свій Telegram ID", "mafia": "Грати в Мафію"}
 
 
 class ApiError(Exception):
@@ -164,7 +165,7 @@ def handle_feedback(db, chat, text, command, admin_ids, reply):
         return True
     if not row:
         return False
-    if text == CANCEL or command.startswith("/") or text in (NEWS, ON, OFF, POLLS, EDITOR, *GAME_LABELS):
+    if text == CANCEL or command.startswith("/") or text in (NEWS, ON, OFF, POLLS, EDITOR, "Мафія", *GAME_LABELS):
         db.execute("DELETE FROM feedback_flow WHERE chat=?", (chat,))
         if text == CANCEL or command == "/cancel":
             reply("Звернення скасовано.")
@@ -260,6 +261,13 @@ def handle(db, update, admin_ids):
     """, (chat, message.get("date", now), int(command == "/start")))
 
     if command == "/start":
+        if len(parts) == 2 and parts[1].startswith("val_"):
+            code = parts[1][4:].upper()
+            if len(code) == 12 and all(c in "0123456789ABCDEF" for c in code) and panel_url().startswith("https://"):
+                db.execute("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,?)", (chat, code, VAL_INVITE))
+            else:
+                reply("Не вдалося відкрити скриньку. Попросіть нове посилання.")
+            return
         invite = parts[1].removeprefix("room_") if len(parts) == 2 and parts[1].startswith("room_") else ""
         if len(invite) == 10 and all(c in "0123456789ABCDEF" for c in invite):
             if panel_url().startswith("https://"):
@@ -284,6 +292,12 @@ def handle(db, update, admin_ids):
             reply(body, photo)
         if not items:
             reply("Шкільних новин поки немає. Підпишіться, щоб отримати перше оголошення.")
+    elif command == "/mafia" or text == "Мафія":
+        if panel_url().startswith("https://"):
+            db.execute("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,8)",
+                       (chat, "Мафія · партія для 6–12 гравців."))
+        else:
+            reply("Для гри потрібно підключити публічний HTTPS-домен.")
     elif command == "/game" or text in GAME_LABELS:
         if panel_url().startswith("https://"):
             db.execute("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,6)",
@@ -341,7 +355,18 @@ def deliver(db, api, chat, body, kind, photo, admin_ids, token=None):
     if kind in (2, 3) and chat not in admin_ids:
         return
     markup = feedback_keyboard(db, chat)
-    if kind == 7:
+    if kind in (VAL_INVITE, VAL_NEW_MAIL):
+        query = {"view": "valentines"}
+        if kind == VAL_INVITE:
+            query["to"] = body
+            body = "Напишіть анонімну валентинку власнику скриньки."
+        url = panel_url().rstrip("/") + "/app/?" + urlencode(query)
+        label = "Написати валентинку" if kind == VAL_INVITE else "Прочитати валентинки"
+        markup = {"inline_keyboard": [[{"text": label, "web_app": {"url": url}}]]}
+    elif kind == 8:
+        markup = {"inline_keyboard": [[{"text": "Відкрити Мафію",
+                                        "web_app": {"url": panel_url().rstrip("/") + "/mafia/"}}]]}
+    elif kind == 7:
         url = panel_url().rstrip("/") + "/game/?" + urlencode({"join": body})
         markup = {"inline_keyboard": [[{"text": "Приєднатися до кімнати", "web_app": {"url": url}}]]}
         body = "Запрошення до гри «Монополія»."
@@ -488,6 +513,8 @@ def main(token=None, admin_text=None, status=print):
         threading.Thread(target=server.run, daemon=True).start()
         from game.web import start_clock
         start_clock(database)
+        from mafia.web import start_clock as start_mafia_clock
+        start_mafia_clock(database)
         db.execute("CREATE TABLE IF NOT EXISTS profile_setup (method TEXT PRIMARY KEY, retry_at REAL)")
         settings = {
             "setMyName": {"name": "86 News"},
@@ -495,7 +522,8 @@ def main(token=None, admin_text=None, status=print):
             "setMyCommands": {"commands": [{"command": k, "description": v} for k, v in COMMANDS.items()]},
         }
         for method, params in settings.items():
-            row = db.execute("SELECT retry_at FROM profile_setup WHERE method=?", (method,)).fetchone()
+            setup_key = "setMyCommands:mafia" if method == "setMyCommands" else method
+            row = db.execute("SELECT retry_at FROM profile_setup WHERE method=?", (setup_key,)).fetchone()
             if row and (row[0] is None or row[0] > time.time()):
                 continue
             retry_at = None
@@ -510,7 +538,7 @@ def main(token=None, admin_text=None, status=print):
                 status(f"Оформлення профілю відкладено ({method}).")
                 retry_at = time.time() + 3
             with db:
-                db.execute("INSERT OR REPLACE INTO profile_setup VALUES (?,?)", (method, retry_at))
+                db.execute("INSERT OR REPLACE INTO profile_setup VALUES (?,?)", (setup_key, retry_at))
             if retry_at is not None:
                 break
         status(f"86 News працює: https://t.me/{me['username']}")
