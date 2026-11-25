@@ -8,9 +8,10 @@ from unittest.mock import Mock, patch
 from uuid import uuid4
 
 import bot
+import requests
 from panel import create_panel
 from test_game import TOKEN, signed
-from valentines import INVITE, NEW_MAIL
+from valentines import INVITE, NEW_MAIL, index_existing_boxes
 
 
 class Valentines(unittest.TestCase):
@@ -21,6 +22,14 @@ class Valentines(unittest.TestCase):
         with closing(sqlite3.connect(self.db)) as db:
             bot.initialize(db)
         self.app = create_panel(self.db, TOKEN, set(), None, "school_bot")
+        self.handles = {}
+        def get_chat(url, *, json, timeout):
+            owner = json["chat_id"]
+            self.assertIsInstance(owner, int)
+            self.assertTrue(url.endswith("/getChat"))
+            chat = dict(id=owner, type="private", username=self.handles.get(owner))
+            return Mock(status_code=200, json=Mock(return_value=dict(ok=True, result=chat)))
+        self.telegram = self.enterContext(patch("valentines.requests.post", side_effect=get_chat))
 
     def call(self, uid, path="", data=None, status=200):
         url = "/app/api/valentines" + path
@@ -77,3 +86,48 @@ class Valentines(unittest.TestCase):
         tail = self.call(1, "?before="+str(first["items"][-1]["id"]))
         self.assertFalse(tail["more"])
         self.assertEqual([i["text"] for i in tail["items"]], ["0"])
+
+    def test_username_delivery_and_reassignment(self):
+        self.handles[12] = "Lada_86"
+        self.assertEqual(self.call(12,"/box",{"action":"open"})["username"], "Lada_86")
+        letter = dict(recipient="@lAdA_86", text="Гарного дня!", nonce=str(uuid4()))
+        self.call(12, "/send", letter, 400)
+        self.call(23, "/send", letter)
+        self.assertEqual(len(self.call(12)["items"]), 1)
+        self.handles[12] = "NewName"
+        self.call(23, "/send", dict(letter, nonce=str(uuid4())), 404)
+        self.handles[40] = "Lada_86"
+        self.call(40, "/box", {"action":"open"})
+        self.call(23, "/send", letter)  # Retrying the original receipt cannot retarget it.
+        self.assertEqual(self.call(40)["items"], [])
+        self.call(23, "/send", dict(letter, recipient="LADA_86", nonce=str(uuid4())))
+        self.assertEqual(len(self.call(40)["items"]), 1)
+        self.assertEqual(self.call(12)["username"], "NewName")
+        self.call(40, "/box", {"action":"close"})
+        self.call(23, "/send", dict(letter, nonce=str(uuid4())), 404)
+
+    def test_legacy_mailbox_and_telegram_outage(self):
+        with closing(sqlite3.connect(self.db)) as db:
+            db.execute("DROP TABLE val_boxes")
+            db.execute("CREATE TABLE val_boxes(owner INTEGER PRIMARY KEY, code TEXT NOT NULL UNIQUE)")
+            db.execute("INSERT INTO val_boxes VALUES (12,'0123456789AB')")
+            db.commit()
+        self.app = create_panel(self.db, TOKEN, set(), None, "school_bot")
+        self.handles[12] = "old_box"
+        index_existing_boxes(self.db, TOKEN)
+        letter = dict(recipient="@old_box", text="Привіт!", nonce=str(uuid4()))
+        self.telegram.side_effect = requests.Timeout()
+        self.call(23, "/send", letter, 503)
+        self.call(23, "/send", dict(letter,recipient="0123456789AB"))
+        self.assertEqual(len(self.call(12)["items"]), 1)
+
+    def test_close_during_username_verification(self):
+        self.handles[12] = "mailbox"
+        self.call(12, "/box", {"action":"open"})
+        lookup = self.telegram.side_effect
+        def close_and_verify(*args, **kwargs):
+            self.call(12, "/box", {"action":"close"})
+            return lookup(*args, **kwargs)
+        self.telegram.side_effect = close_and_verify
+        self.call(23, "/send", dict(recipient="@mailbox",text="Привіт!",nonce=str(uuid4())), 404)
+        self.assertEqual(self.call(12)["items"], [])

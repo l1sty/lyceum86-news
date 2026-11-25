@@ -230,7 +230,8 @@ nav a[aria-current=page] svg{color:var(--tint);fill:var(--mid)}
 <section id="val-view" hidden>
  <form class="post" id="val-compose">
   <h2>Написати валентинку</h2>
-  <label>Посилання або код отримувача<input name="recipient" required autocomplete="off" spellcheck="false"></label>
+  <label>Кому надіслати<input name="recipient" placeholder="@username, посилання або код" required autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="val-recipient-hint"></label>
+  <p id="val-recipient-hint">Вкажіть ім’я в Telegram того, хто відкрив скриньку для валентинок.</p>
   <label>Ваша валентинка<textarea name="letter" rows="4" maxlength="1000" required></textarea></label>
   <button class="action">Надіслати без підпису</button>
   <span id="val-sent" role="status"></span>

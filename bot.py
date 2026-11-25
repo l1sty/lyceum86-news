@@ -515,6 +515,8 @@ def main(token=None, admin_text=None, status=print):
         start_clock(database)
         from mafia.web import start_clock as start_mafia_clock
         start_mafia_clock(database)
+        from valentines import index_existing_boxes
+        threading.Thread(target=index_existing_boxes, args=(database, token), daemon=True, name="valentine-usernames").start()
         db.execute("CREATE TABLE IF NOT EXISTS profile_setup (method TEXT PRIMARY KEY, retry_at REAL)")
         settings = {
             "setMyName": {"name": "86 News"},

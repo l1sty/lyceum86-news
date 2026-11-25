@@ -103,13 +103,6 @@ function Lobby({ r, cmd, busy }: { r: Room; cmd: Command; busy: boolean }) {
       <small role="status">
         {copy || "Надішліть друзям цей код для входу."}
       </small>
-      <div className="section-line">
-        <h2>Гравці</h2>
-        <span>
-          {r.players.length} / {r.capacity}
-        </span>
-      </div>
-      <Roster r={r} />
       {r.host === r.me && !r.spectator && (
         <fieldset disabled={busy}>
           <legend>Налаштування</legend>
@@ -174,6 +167,11 @@ function Lobby({ r, cmd, busy }: { r: Room; cmd: Command; busy: boolean }) {
         Готові {ready} з {r.players.length}. Для старту потрібно щонайменше
         шестеро.
       </p>
+      <div className="section-line">
+        <h2>Гравці</h2>
+        <span>{r.players.length} / {r.capacity}</span>
+      </div>
+      <Roster r={r} />
     </>
   );
 }

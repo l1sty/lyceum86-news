@@ -24,9 +24,13 @@ window.initializeValentines = function (requestData, invite) {
     element('address').hidden = !code;
     element('copy').hidden = !code;
     toggle.textContent = code ? 'Закрити прийом' : 'Відкрити скриньку';
-    element('help').textContent = code
-      ? 'Надішліть цю адресу друзям. Якщо закрити прийом, вона перестане діяти.'
-      : 'Відкрийте скриньку, щоб отримати адресу для друзів.';
+    let help = 'Відкрийте скриньку, щоб друзі могли писати вам за іменем у Telegram або за посиланням.';
+    if (code) {
+      help = box.username
+        ? 'Друзі можуть надіслати вам валентинку за іменем @' + box.username + ' або за посиланням нижче.'
+        : 'Поділіться адресою скриньки з друзями.';
+    }
+    element('help').textContent = help;
     loaded = true;
   }
 
@@ -96,10 +100,10 @@ window.initializeValentines = function (requestData, invite) {
     const letter = form.elements.letter;
     const value = recipient.value.trim();
     const match = /^https:\/\/t\.me\/\w+\?start=val_([a-f0-9]{12})$/i.exec(value);
-    const target = (match ? match[1] : value).toUpperCase();
+    const target = match ? match[1] : value;
     const sent = element('sent');
-    if (!/^[A-F0-9]{12}$/.test(target)) {
-      sent.textContent = 'Введіть код із 12 символів або посилання на скриньку.';
+    if (!/^@?[a-z0-9_]{1,32}$/i.test(target)) {
+      sent.textContent = 'Введіть @username, посилання на скриньку або код із 12 символів.';
       recipient.focus();
       return;
     }
@@ -107,7 +111,7 @@ window.initializeValentines = function (requestData, invite) {
     sent.textContent = 'Надсилаємо…';
     try {
       nonce ||= crypto.randomUUID();
-      await requestData('valentines/send', {code:target, text:letter.value, nonce});
+      await requestData('valentines/send', {recipient:target, text:letter.value, nonce});
       nonce = null;
       letter.value = '';
       sent.textContent = 'Валентинку доставлено.';

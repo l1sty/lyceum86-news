@@ -1,5 +1,8 @@
 import type { Home } from "./model";
 interface WebApp {
+  isActive?: boolean;
+  onEvent?(event: "activated" | "deactivated", handler: () => void): void;
+  offEvent?(event: "activated" | "deactivated", handler: () => void): void;
   initData: string;
   ready(): void;
   expand(): void;

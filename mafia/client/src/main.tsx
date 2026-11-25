@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Menu, Rules, Archive } from "./Library";
 import { Table } from "./Table";
+import { Music } from "./Music";
 import { api, ApiError, bootstrap, haptic, initTelegram, tg } from "./api";
 import type { Command, Home, Role, Room } from "./model";
 import "./style.css";
@@ -225,7 +226,7 @@ function App() {
   }, [screen]);
   return (
     <div
-      className="shell"
+      className={room ? "shell in-room" : "shell"}
       data-light={
         room?.phase === "night"
           ? "night"
@@ -245,6 +246,7 @@ function App() {
         <span className="edition">
           {room ? "Ігрова кімната" : "Клуб настільних ігор"}
         </span>
+        <Music />
       </header>
       {(offline || error) && (
         <div className="notice" role="alert">
