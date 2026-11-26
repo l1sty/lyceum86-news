@@ -1,3 +1,4 @@
+from case_replies import answer_case, initialize_routes, remember_notice, save_case
 import getpass
 import json
 from http.client import IncompleteRead
@@ -72,7 +73,9 @@ def get_identity(api, status):
 
 
 def initialize(db):
+    initialize_routes(db)
     db.executescript("""
+        CREATE TABLE IF NOT EXISTS cases (code TEXT PRIMARY KEY, body TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'Отримано', answer TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 0);
         CREATE TABLE IF NOT EXISTS subscribers (chat INTEGER PRIMARY KEY);
         CREATE TABLE IF NOT EXISTS feedback_flow (chat INTEGER PRIMARY KEY, stage TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS audience (
@@ -140,12 +143,7 @@ def handle_feedback(db, chat, text, command, admin_ids, reply):
     if not admin_ids:
         reply("Прийом звернень поки недоступний.")
         return True
-    header = row[0]
-    if header != ANONYMOUS:
-        header += f"\nTelegram ID автора — {chat}"
-    body = f"{header}\n\n{text}"
-    db.executemany("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,2)",
-                   [(editor, body) for editor in admin_ids])
+    save_case(db, chat, row[0], text, admin_ids)
     reply("Звернення прийнято для надсилання редакторам.")
     return True
 
@@ -162,6 +160,8 @@ def handle(db, update, admin_ids):
     def reply(body):
         db.execute("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,0)", (chat, body))
 
+    if is_editor and "reply_to_message" in message and answer_case(db, chat, message, reply):
+        return
     if handle_feedback(db, chat, text, command, admin_ids, reply):
         return
     now = int(time.time())
@@ -231,10 +231,12 @@ def run(db, api, admin_ids):
                 with db:
                     handle(db, update, admin_ids)
                     db.execute("UPDATE cursor_state SET pos=?", (update["update_id"] + 1,))
-            for row, chat, body, kind in db.execute("SELECT id,chat,body,broadcast FROM deliveries ORDER BY id LIMIT 20").fetchall():
+            for row, chat, body, kind in db.execute("SELECT id,chat,body,broadcast FROM deliveries ORDER BY (broadcast=11) DESC,id LIMIT 20").fetchall():
                 try:
                     if kind != 2 or chat in admin_ids:
-                        api("sendMessage", chat_id=chat, text=body, reply_markup=feedback_keyboard(db, chat))
+                        sent = api("sendMessage", chat_id=chat, text=body, reply_markup=feedback_keyboard(db, chat))
+                        if kind == 2:
+                            remember_notice(db, chat, body, sent)
                 except ApiError as error:
                     if error.code not in (400, 403):
                         raise

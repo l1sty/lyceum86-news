@@ -1,13 +1,13 @@
 :root {
-  color-scheme: light;
+  color-scheme: dark;
   --hue: 216;
-  --bg: #f6f5f0;
-  --card: #fffefa;
-  --ink: #202322;
-  --line: #d6d6cd;
-  --muted: #565d59;
-  --blue: hsl(var(--hue) 42% 31%);
-  --accent-soft: hsl(var(--hue) 28% 91%);
+  --bg: #131619;
+  --card: #1d2227;
+  --ink: #eff1ed;
+  --line: #394147;
+  --muted: #b3bcbf;
+  --blue: hsl(var(--hue) 62% 77%);
+  --accent-soft: hsl(var(--hue) 25% 23%);
   --accent-ink: hsl(var(--hue) 29% 19%);
   --focus: var(--blue);
   --gutter: clamp(16px, 4.8vw, 54px);
@@ -75,17 +75,17 @@ form.post, #val-view .post, #poll-view .post {white-space: normal}
 .news-photo img {width: 100%; height: 100%; min-height: 0; margin: 0; max-height: none}
 .post h2:first-child {margin: 0 0 14px}
 label {font-weight: 590}
-input:not([type=radio],[type=file]), select, textarea {width: 100%; min-height: var(--touch); border: 1px solid #969c97; border-radius: 6px; background: var(--card); padding: 10px 12px; font-size: 1rem; font-weight: 400}
+input:not([type=radio],[type=file]), select, textarea {width: 100%; min-height: var(--touch); border: 1px solid #78828a; border-radius: 6px; background: var(--card); padding: 10px 12px; font-size: 1rem; font-weight: 400}
 textarea {resize: vertical}
 #case-form label, #lookup-form label, #val-view label {display: grid; gap: 6px; margin-bottom: 14px}
-input::placeholder, textarea::placeholder {color: #626b65; opacity: 1}
+input::placeholder, textarea::placeholder {color: var(--muted); opacity: 1}
 #privacy-note, #val-recipient-hint, #val-help {color: var(--muted); font-size: .9rem; margin-bottom: 16px}
 #val-view .val-actions {display: flex; align-items: center; gap: 10px; flex-wrap: wrap}
 .val-actions h2 {margin: 12px auto 12px 0}
 .val-actions + #val-letters, #val-view label:not(:first-child) {margin-top: 10px}
 #val-view :is(time, [role=status]), #stats-note, #telegram-id {color: var(--muted); font-size: .9rem}
 #val-view [role=status]:not(:empty), #notice:not(:empty) {display: block; margin-top: 12px}
-.action, #editor-workspace .primary {border-color: transparent; background: var(--blue); color: white}
+.action, #editor-workspace .primary {border-color: transparent; background: var(--blue); color: var(--bg)}
 .receipt code {display: block; font: 600 1.25rem/1.5 ui-monospace, monospace; margin: 12px 0}
 .poll-option {display: flex; align-items: center; width: 100%; gap: 12px; margin-top: 8px; text-align: left; overflow-wrap: anywhere; font-weight: 500}
 .poll-option::before {content: ''; flex: 0 0 16px; height: 16px; border-radius: 50%; border: 1px solid #848c86}

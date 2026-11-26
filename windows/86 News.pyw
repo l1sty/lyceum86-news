@@ -12,14 +12,15 @@ def launch():
     style = ttk.Style(root)
     if "clam" in style.theme_names():
         style.theme_use("clam")
-    paper, ink, muted, accent = "#f6f5f0", "#202322", "#565d59", "#334d69"
+    paper, ink, muted, accent = "#131619", "#eff1ed", "#b3bcbf", "#334d69"
     style.configure(".", font=("Segoe UI", 10), background=paper, foreground=ink)
     style.configure("Title.TLabel", font=("Georgia", 22), padding=(0, 0, 0, 16))
     style.configure("Note.TLabel", foreground=muted)
-    style.configure("TEntry", padding=7, fieldbackground="#fffefa")
-    style.configure("TButton", padding=(12, 7))
+    style.configure("TEntry", padding=7, fieldbackground="#1d2227", foreground=ink, insertcolor=ink)
+    style.configure("TButton", padding=(12, 7), background="#293239", foreground=ink)
+    style.map("TButton", background=[("active", "#394147"), ("pressed", "#25364b")])
     style.configure("Primary.TButton", background=accent, foreground="white")
-    style.map("Primary.TButton", background=[("disabled", "#d6d6cd"), ("pressed", "#25364b"), ("active", "#3d5978")],
+    style.map("Primary.TButton", background=[("disabled", "#394147"), ("pressed", "#25364b"), ("active", "#3d5978")],
               foreground=[("disabled", muted)])
     frame = ttk.Frame(root, padding=24)
     frame.pack(fill="both", expand=True)

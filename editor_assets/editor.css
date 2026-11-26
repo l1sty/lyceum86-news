@@ -1,6 +1,6 @@
 #editor-workspace {
   --editor-field: var(--card);
-  --editor-border: #969c97;
+  --editor-border: #78828a;
   margin-top: 20px;
   overflow-wrap: anywhere;
 }
@@ -49,8 +49,8 @@
 .editor-tabs span {display: flex; flex-shrink: 0; color: var(--blue)}
 .editor-tabs svg {width: 18px; height: 18px}
 #editor-workspace button:disabled {opacity: .55; cursor: default}
-#editor-workspace .primary {width: 100%; background: var(--blue); border-color: transparent; color: white}
-#editor-workspace .primary:enabled:hover {background: var(--accent-ink)}
+#editor-workspace .primary {width: 100%; background: var(--blue); border-color: transparent; color: var(--bg)}
+#editor-workspace .primary:enabled:hover {background: var(--accent-ink); color: white}
 
 .editor-content :is(fieldset, #confirmation, #pollform, .results, details) {
   min-width: 0;

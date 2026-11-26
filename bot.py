@@ -1,3 +1,4 @@
+from windows.case_replies import answer_case, initialize_routes, remember_notice, save_case
 from contextlib import closing
 import json
 from http.client import IncompleteRead
@@ -87,6 +88,7 @@ def get_identity(api, status):
 
 
 def initialize(db):
+    initialize_routes(db)
     db.executescript("""
         CREATE TABLE IF NOT EXISTS subscribers (chat INTEGER PRIMARY KEY);
         CREATE TABLE IF NOT EXISTS feedback_flow (chat INTEGER PRIMARY KEY, stage TEXT NOT NULL);
@@ -204,17 +206,6 @@ def handle_feedback(db, chat, text, command, admin_ids, reply):
     return True
 
 
-def save_case(db, chat, header, text, admin_ids):
-    if header != ANONYMOUS:
-        header += f"\nTelegram ID автора — {chat}"
-    body = f"{header}\n\n{text}"
-    code = secrets.token_hex(8).upper()
-    case_id = db.execute("INSERT INTO cases(code,body) VALUES (?,?)", (code, body)).lastrowid
-    db.executemany("INSERT INTO deliveries(chat,body,broadcast) VALUES (?,?,2)",
-                   [(editor, f"Звернення №{case_id}\n{body}") for editor in admin_ids])
-    return code
-
-
 def change_subscription(db, chat, subscribed):
     if subscribed:
         db.execute("INSERT OR IGNORE INTO subscribers VALUES (?)", (chat,))
@@ -251,6 +242,8 @@ def handle(db, update, admin_ids):
     def reply(body, photo=None):
         db.execute("INSERT INTO deliveries(chat,body,broadcast,photo) VALUES (?,?,0,?)", (chat, body, photo))
 
+    if is_editor and "reply_to_message" in message and answer_case(db, chat, message, reply):
+        return
     if handle_feedback(db, chat, text, command, admin_ids, reply):
         return
     now = int(time.time())
@@ -389,7 +382,9 @@ def deliver(db, api, chat, body, kind, photo, admin_ids, token=None):
     elif chat in admin_ids and markup is MENU:
         markup = dict(MENU, keyboard=MENU["keyboard"] + [[EDITOR, GAME]])
     if photo is None:
-        api("sendMessage", chat_id=chat, text=body, reply_markup=markup)
+        sent = api("sendMessage", chat_id=chat, text=body, reply_markup=markup)
+        if kind == 2:
+            remember_notice(db, chat, body, sent)
         return
     file_id, = db.execute("SELECT file_id FROM photos WHERE id=?", (photo,)).fetchone()
     if file_id:
@@ -454,7 +449,7 @@ def run(db, api, admin_ids, token=None):
                         if error.code != 400:
                             raise
             remove_poll_messages(db, api)
-            for row, chat, body, kind, photo in db.execute("SELECT id,chat,body,broadcast,photo FROM deliveries ORDER BY id LIMIT 20").fetchall():
+            for row, chat, body, kind, photo in db.execute("SELECT id,chat,body,broadcast,photo FROM deliveries ORDER BY (broadcast=11) DESC,id LIMIT 20").fetchall():
                 try:
                     deliver(db, api, chat, body, kind, photo, admin_ids, token)
                 except ApiError as error:

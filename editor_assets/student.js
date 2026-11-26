@@ -296,8 +296,8 @@ let valentinesInbox;
 addEventListener('DOMContentLoaded',()=>{
  valentinesInbox=window.initializeValentines(requestData,params.get('to'));
  const tg=window.Telegram?.WebApp;
- if(tg?.isVersionAtLeast?.('6.9'))tg.setHeaderColor('#f6f5f0');
- if(tg?.isVersionAtLeast?.('6.1'))tg.setBackgroundColor('#f6f5f0');
+ if(tg?.isVersionAtLeast?.('6.9'))tg.setHeaderColor('#131619');
+ if(tg?.isVersionAtLeast?.('6.1'))tg.setBackgroundColor('#131619');
  tg?.ready();tg?.expand();
  render(false);
  if(launch||tg?.initData)requestData('profile').then(profile=>{
