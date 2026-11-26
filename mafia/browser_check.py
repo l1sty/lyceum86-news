@@ -43,9 +43,10 @@ def run():
             return page.get_by_role("button", name=name, exact=True)
 
         def check_layout(page):
-            for width, height in ((320,568),(375,667),(430,932),(844,390),(360,350)):
+            for width, height in ((320,568),(360,350),(375,667),(390,844),(430,932),
+                                  (768,1024),(844,390),(1280,900),(1440,900)):
                 page.set_viewport_size({"width":width,"height":height})
-                assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), (width,height)
+                assert page.evaluate("document.documentElement.scrollWidth") <= width + 1, (width,height)
                 assert page.locator("button:visible, input:visible, select:visible").evaluate_all(
                     "(items) => items.every(el => {const b=el.getBoundingClientRect();"
                     "return b.left >= -1 && b.right <= innerWidth+1})"), (width,height)

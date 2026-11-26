@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Check, Copy, Eye, EyeOff, Moon, Send, Timer } from "lucide-react";
 import {
   art,
@@ -63,7 +62,7 @@ function Countdown({ r }: { r: Room }) {
     const update = () =>
       setSeconds(Math.max(0, Math.ceil((end - performance.now()) / 1000)));
     update();
-    const interval = setInterval(update, 250);
+    const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
   }, [r.deadline, r.now]);
   return (
@@ -176,8 +175,7 @@ function Lobby({ r, cmd, busy }: { r: Room; cmd: Command; busy: boolean }) {
   );
 }
 function Secret({ r }: { r: Room }) {
-  const [open, setOpen] = useState(false),
-    reduce = useReducedMotion();
+  const [open, setOpen] = useState(false);
   useEffect(() => {
     const hide = () => {
       if (document.hidden) setOpen(false);
@@ -200,14 +198,8 @@ function Secret({ r }: { r: Room }) {
         {open ? <EyeOff /> : <Eye />}
         {open ? "Приховати роль" : "Відкрити свою роль"}
       </button>
-      <AnimatePresence>
         {open && (
-          <motion.div
-            className="role-card"
-            initial={reduce ? false : { opacity: 0, rotateY: -14, y: 8 }}
-            animate={{ opacity: 1, rotateY: 0, y: 0 }}
-            exit={{ opacity: 0 }}
-          >
+          <div className="role-card">
             <img src={art(r.role)} alt="" />
             <div>
               <small>Ваша роль</small>
@@ -242,9 +234,8 @@ function Secret({ r }: { r: Room }) {
                 </>
               )}
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
     </div>
   );
 }
@@ -267,8 +258,7 @@ function Choices({ r, cmd, busy }: { r: Room; cmd: Command; busy: boolean }) {
               .map((p) => {
                 const active = r.selected[action] === p.id;
                 return (
-                  <motion.button
-                    whileTap={{ scale: 0.985 }}
+                  <button
                     disabled={busy}
                     aria-pressed={active}
                     key={p.id}
@@ -277,7 +267,7 @@ function Choices({ r, cmd, busy }: { r: Room; cmd: Command; busy: boolean }) {
                     <Avatar p={p} />
                     <span>{p.name}</span>
                     <i>{active && <Check size={15} />}</i>
-                  </motion.button>
+                  </button>
                 );
               })}
           </div>

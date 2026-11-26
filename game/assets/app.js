@@ -9,6 +9,10 @@ const currency=new Intl.NumberFormat('uk-UA');
 const money=n=>currency.format(n)+' ₴';
 const modeName=m=>m==='quick'?'Швидка':'Класична';
 const dialog=$('dialog'), sheet=$('#sheet');
+const backButton=tg?.isVersionAtLeast?.('6.1') ? tg.BackButton : null;
+backButton?.hide();
+backButton?.onClick(dismissSheet);
+dialog.addEventListener('close',()=>{if(!dialog.open)backButton?.hide()});
 let lobby, room, board, roomTab='log', lobbyTab='rooms', busy=false, polling=false, epoch=0, scene, fallback=false, lastVisual, rosterRoom, turnId, resultKey, statusKey, actionKey;
 let offset=0, connectionFailed=false;
 let deedSignature='';
@@ -27,7 +31,23 @@ function dismissSheet(){
 }
 dialog.addEventListener('cancel',e=>{e.preventDefault();dismissSheet()});
 dialog.querySelector('.dialog-head').addEventListener('submit',e=>{e.preventDefault();dismissSheet()});
-function error(message=''){const el=$('#error');el.textContent=message;el.hidden=!message}
+function error(message='',fromSync=false){
+  const el=$(dialog.open&&!fromSync?'#sheet-error':'#error');
+  // A successful background poll must not erase validation feedback.
+  if(fromSync&&!message&&el.dataset.source!=='connection')return;
+  el.dataset.source=fromSync?'connection':'action';
+  el.textContent=message;el.hidden=!message;
+}
+function access(show,message){
+  $('.access-panel').hidden=!show;
+  $('main').hidden=show;
+  if(show){
+    $('#access-status').textContent=message;
+    $('#access-retry').hidden=false;
+    if(dialog.open)dialog.close();
+  }
+}
+$('#access-retry').onclick=()=>void poll();
 async function api(path,data){
   const options={headers:{'X-Telegram-Init-Data':tg?.initData||'','X-Game-Session':ticket},cache:'no-store'};
   try{options.headers['X-Student-Launch']=sessionStorage.getItem('school-launch')||''}catch{}
@@ -38,7 +58,7 @@ async function api(path,data){
   const session=r.headers.get('X-Game-Session');if(session){ticket=session;try{sessionStorage.setItem(ticketKey,session)}catch{}}
   if(r.status===204)return null;
   const result=await r.json().catch(()=>({error:'Сервер тимчасово недоступний.'}));
-  if(!r.ok){if(r.status===403){$('main').hidden=true;$('#access-status').hidden=false;$('#access-status').textContent=result.error}const err=Error(result.error||'Не вдалося виконати дію.');err.status=r.status;throw err}
+  if(!r.ok){if(r.status===403){access(true,result.error)}const err=Error(result.error||'Не вдалося виконати дію.');err.status=r.status;throw err}
   return result;
 }
 function modal(html,section='Монополія',refreshing=false){
@@ -47,9 +67,10 @@ function modal(html,section='Монополія',refreshing=false){
   closingSheet=false;
   delete sheet.dataset.tile;
   sheet.innerHTML=html;
+  $('#sheet-error').hidden=true;
   sheet.querySelector('h2').id='dialog-title';
   $('#sheet-section').textContent=section;
-  if(!dialog.open)dialog.showModal();
+  if(!dialog.open){dialog.showModal();backButton?.show()}
   dialog.scrollTop=0;
   if(opening){dialog.style.transform='';surface(dialog,{y:[16,0],scale:[.988,1]})}
   else if(reversing)surface(dialog,{y:0,scale:1});
@@ -69,10 +90,12 @@ const tileMarkup=new WeakMap();
 const labelBoxes=[];
 const labelSize=new ResizeObserver(entries=>{
   for(const entry of entries){
-    const size=entry.borderBoxSize?.[0];
-    if(!size?.inlineSize)continue;
+    const size=entry.borderBoxSize?.[0] ?? entry.borderBoxSize;
+    const width=size?.inlineSize ?? entry.target.offsetWidth;
+    const height=size?.blockSize ?? entry.target.offsetHeight;
+    if(!width || !height)continue;
     const box=labelBoxes[Number(entry.target.dataset.tile)];
-    if(box){box.w=size.inlineSize;box.h=size.blockSize}
+    if(box){box.w=width;box.h=height}
   }
   if(labelPositions && !fallback)placeLabels(...labelPositions);
 });
@@ -103,12 +126,14 @@ function placeLabels(points,width,height){
     }
   }
   for(const box of labelBoxes){
-    const label=labels.children[box.tile];
-    label.hidden=!box.visible;
+    const label=box.element;
+    if(label.hidden===box.visible)label.hidden=!box.visible;
     if(!box.visible)continue;
-    const x=Math.max(box.w/2,Math.min(width-box.w/2,box.x));
-    const y=Math.max(box.h/2,Math.min(height-box.h/2,box.y));
-    label.style.transform='translate('+x.toFixed(1)+'px,'+y.toFixed(1)+'px) translate(-50%,-50%)';
+    const x=Math.round(Math.max(0,Math.min(width-box.w,box.x-box.w/2)));
+    const y=Math.round(Math.max(0,Math.min(height-box.h,box.y-box.h/2)));
+    if(x===box.left && y===box.top)continue;
+    box.left=x;box.top=y;
+    label.style.transform='translate3d('+x+'px,'+y+'px,0)';
   }
 }
 function renderTiles(){
@@ -126,11 +151,12 @@ function renderTiles(){
         const template=document.createElement('template');template.innerHTML=html;
         const next=template.content.firstElementChild;
         if(current){
-          current.className=next.className;current.style.cssText=next.style.cssText;
+          current.className=next.className;
+          for(const key of ['--tile','--owner'])current.style.setProperty(key,next.style.getPropertyValue(key));
           current.setAttribute('aria-label',next.getAttribute('aria-label'));current.replaceChildren(...next.childNodes);
         }else{
           host.append(next);
-          if(overlay){labelBoxes[i]={tile:i,w:22,h:22};labelSize.observe(next)}
+          if(overlay){labelBoxes[i]={tile:i,element:next,w:22,h:22};labelSize.observe(next)}
         }
         const button=current||next;tileMarkup.set(button,html);
         const deed=room?.deeds[i], before=lastOwners?.deeds[i];
@@ -216,7 +242,7 @@ $('#create').onclick=()=>modal(`<h2>Нова кімната</h2><form id="new">
     <label><input type="radio" name="access" value="public" checked><span>Усі гравці</span></label>
     <label><input type="radio" name="access" value="private"><span>Друзі за кодом</span></label>
   </fieldset><button class="primary">Створити кімнату</button></form>`,'Ігрові кімнати');
-$('#join').onclick=()=>modal('<h2>Вхід за кодом</h2><form id="code"><label>Код кімнати<input name="code" maxlength="10" required autocomplete="off" autocapitalize="characters"></label><button class="primary">Приєднатися</button></form>');
+$('#join').onclick=()=>modal('<h2>Вхід за кодом</h2><form id="code"><label>Код кімнати<input name="code" maxlength="10" required autocomplete="off" spellcheck="false" autocapitalize="characters"></label><button class="primary">Приєднатися</button></form>');
 function renderLobby(){
   if(!lobby)return;
   const rows=lobbyTab==='rooms'?lobby.rooms.map(r=>'<div class="row"><div><strong>'+esc(r.name)+'</strong><small>'+modeName(r.mode)+' · '+r.size+'/6 учасників</small></div><button data-join="'+esc(r.code)+'">Увійти</button></div>'):
@@ -382,11 +408,11 @@ let invitedRoom=new URLSearchParams(location.search).get('join');
 async function sync(){
   if(polling||busy||document.hidden)return;const generation=epoch;polling=true;
   try{
-    if(room){const next=await api('rooms/'+room.code+'?v='+room.version);if(generation!==epoch)return;if(connectionFailed){connectionFailed=false;error()}if(!next)return;room=next;}
-    else{const next=await api('lobby');if(generation!==epoch)return;lobby=next;board=lobby.board;$('main').hidden=false;$('#access-status').hidden=true;loadBoard();
+    if(room){const next=await api('rooms/'+room.code+'?v='+room.version);if(generation!==epoch)return;if(connectionFailed){connectionFailed=false;error('',true)}if(!next)return;room=next;}
+    else{const next=await api('lobby');if(generation!==epoch)return;lobby=next;board=lobby.board;access(false);loadBoard();
       if(lobby.current){const resumed=await api('rooms/'+lobby.current);if(generation!==epoch)return;room=resumed}}
     if(generation===epoch){
-      render();error();
+      render();error('',true);
       if(invitedRoom){
         const code=invitedRoom;
         invitedRoom=null;
@@ -396,11 +422,12 @@ async function sync(){
         }
       }
     }
-  }catch(e){if(generation===epoch){if($('main').hidden)$('#access-status').textContent=e.message;connectionFailed=true;if(e.status===404){room=null;render()}error(e.message)}}finally{polling=false}
+  }catch(e){if(generation===epoch){if($('main').hidden)access(true,e.message);connectionFailed=true;if(e.status===404){room=null;render()}error(e.message,true)}}finally{polling=false}
 }
 async function send(action,values={},enter=false){
-  if(busy)return;busy=true;epoch++;error();if(dialog.open){closingSheet=false;cancelMotion(dialog);dialog.close()}
+  if(busy)return;busy=true;epoch++;error();const wasOpen=dialog.open;
   try{const next=await api(enter?'rooms':'rooms/'+room.code,{version:room?.version,action,...values});
+    if(wasOpen && dialog.open){closingSheet=false;cancelMotion(dialog);dialog.close()}
     if(next.left)room=null;else room=next;
     render();if(enter||next.left)surface($(room?'#session':'#lobby'),{y:[8,0]});return true;
   }catch(e){error(e.message);return false}finally{busy=false;if(!room)void sync()}
@@ -410,7 +437,7 @@ document.addEventListener('click',async e=>{
   if(b.dataset.tile!==undefined)detail(Number(b.dataset.tile));
   if(b.dataset.camera)scene?.camera(b.dataset.camera);
   if(b.dataset.join)send('join',{code:b.dataset.join},true);
-  if(b.dataset.tab){const nav=b.closest('nav');nav.querySelector('.active')?.classList.remove('active');b.classList.add('active');
+  if(b.dataset.tab){const nav=b.closest('nav');nav.querySelectorAll('[data-tab]').forEach(tab=>tab.setAttribute('aria-pressed',String(tab===b)));nav.querySelector('.active')?.classList.remove('active');b.classList.add('active');
     if(nav.id==='room-tabs'){roomTab=b.dataset.tab;renderFeed()}else{lobbyTab=b.dataset.tab;renderLobby()}}
   if(b.dataset.act==='confirm-resign'){modal('<h2>Залишити партію?</h2><p>Ви втратите ділянки й вибудете з гри.</p>'+btn('Так, здатися','resign',true));return}
   if(b.dataset.act==='code-card'){
@@ -478,7 +505,7 @@ function resume(){
   void poll();
   if(document.hidden)return;
   updateClock();
-  clockTimer=setInterval(updateClock,400);
+  clockTimer=setInterval(updateClock,1000);
 }
 document.addEventListener('visibilitychange',resume);
 window.addEventListener('online',poll);

@@ -10,11 +10,11 @@ function point(i) {
   return [[-5 + 2*k,5],[5,5 - 2*k],[5 - 2*k,-5],[-5,-5 + 2*k]][a];
 }
 export function city(host, select, placeLabels, cue = () => {}) {
-  const renderer = new T.WebGLRenderer({alpha:true, antialias:true, powerPreference:'default'});
   const touch = matchMedia('(pointer: coarse)').matches;
   const compact = touch || matchMedia('(max-width: 780px)').matches;
   const lowMemory = touch && navigator.deviceMemory && navigator.deviceMemory<=4;
-  let qualityLimit=compact?(lowMemory?1:1.25):1.6;
+  const renderer = new T.WebGLRenderer({alpha:true, antialias:!lowMemory, powerPreference:'default'});
+  let qualityLimit=compact ? (lowMemory ? 0.82 : 1.25) : 1.6;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = T.PCFSoftShadowMap;
   renderer.shadowMap.autoUpdate = false;
@@ -447,7 +447,7 @@ export function city(host, select, placeLabels, cue = () => {}) {
   }
   function redraw(){if(!frame&&!disposed&&inView&&!document.hidden)frame=requestAnimationFrame(draw)}
   function positionCamera(){
-    const half=Math.max(8.0,8.6*height/width)/zoom;
+    const half=Math.max(8.0,9.25*height/width)/zoom;
     Object.assign(cam,{left:-half*width/height,right:half*width/height,top:half,bottom:-half,near:.1,far:100});
     cam.position.set(panX+18*Math.sin(angle),24,panZ+18*Math.cos(angle));cam.lookAt(panX,.40,panZ);
     cam.updateMatrixWorld();cam.updateProjectionMatrix();
@@ -472,6 +472,7 @@ export function city(host, select, placeLabels, cue = () => {}) {
     host.classList.toggle('compact-labels',width<760||height<420);
     resolution();renderer.setSize(width,height,false);positionCamera();redraw();
   }
+  lightingBudget();
   const resize=new ResizeObserver(size);resize.observe(host);size();
   const intersection=new IntersectionObserver(([entry])=>{
     inView=entry.isIntersecting;

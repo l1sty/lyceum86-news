@@ -5,44 +5,55 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
   <meta name="theme-color" content="#14171c">
   <title>Монополія</title>
+  <link rel="stylesheet" href="/game/assets/inter.css">
+  <link rel="stylesheet" href="/app/assets/ui.css">
   <link rel="stylesheet" href="/game/assets/style.css">
+  <script defer src="/app/assets/viewport.js"></script>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script defer src="/game/assets/motion.js"></script>
   <script defer src="/game/assets/gsap.min.js"></script>
 </head>
 <body>
-<p id="access-status" role="status">Перевіряємо доступ…</p>
-<a href="/app/" style="color:inherit;display:inline-block;padding:12px">До ліцею</a>
+<noscript>Увімкніть JavaScript, щоб відкрити гру.</noscript>
+<section class="access-panel">
+  <a href="/app/#entertainment" class="back-link">← До ліцею</a>
+  <h1>Монополія</h1><p id="access-status" role="status">Перевіряємо доступ…</p>
+  <button type="button" id="access-retry" hidden>Повторити</button>
+</section>
 <main hidden>
-  <header class="mast"><div class="brand"><span class="mark" aria-hidden="true">▦</span><h1>Монополія</h1></div><span id="subtitle"></span><div class="mast-controls"><button id="sound" aria-label="Звук гри" aria-pressed="true"><svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9h4l5-4v14l-5-4H3z"/><path class="waves" d="M16 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/><path class="silent" d="m16 9 5 6m0-6-5 6"/></svg></button><button id="fullscreen" aria-label="Повноекранний режим">⛶</button><button id="help" aria-label="Правила гри">?</button></div></header>
+  <header class="mast"><div class="brand"><a class="back-link" href="/app/#entertainment" aria-label="До ліцею">←</a><h1>Монополія</h1></div><span id="subtitle"></span><div class="mast-controls"><button id="sound" aria-label="Звук гри" aria-pressed="true"><svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9h4l5-4v14l-5-4H3z"/><path class="waves" d="M16 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/><path class="silent" d="m16 9 5 6m0-6-5 6"/></svg></button><button id="fullscreen" aria-label="Повноекранний режим">⛶</button><button id="help" aria-label="Правила гри">?</button></div></header>
   <div class="table-layout">
-    <section class="tabletop">
-      <div class="board-frame">
-        <div id="players" aria-label="Гравці"></div>
-        <div id="stage" aria-label="Ігрове поле"><section id="result" aria-label="Підсумки партії" aria-live="polite" hidden></section></div>
-        <div id="tile-rail" aria-label="Клітинки поля"></div>
-        <div class="stage-foot"><span id="stage-label">20 клітинок</span><div id="camera" aria-label="Камера"><button data-camera="rotate" aria-label="Повернути поле">↻</button><button data-camera="out" aria-label="Віддалити">−</button><button data-camera="in" aria-label="Наблизити">+</button><button data-camera="reset" aria-label="Початковий вигляд">⌂</button></div><button id="catalog">Ділянки</button></div>
-      </div>
-    </section>
     <div class="console">
       <p class="error" id="error" role="alert" hidden></p>
       <section id="lobby">
         <h2>Ігрові кімнати</h2>
-        <div class="toolbar"><button id="create" class="gold">Створити кімнату <span aria-hidden="true">＋</span></button><button id="join">Увійти за кодом</button></div>
-        <nav id="lobby-tabs" aria-label="Кімнати та рейтинг"><button class="active" data-tab="rooms">Відкриті кімнати</button><button data-tab="leaders">Рейтинг</button></nav>
+        <div class="toolbar"><button id="create" class="primary">Створити кімнату</button><button id="join">Увійти за кодом</button></div>
+        <nav id="lobby-tabs" aria-label="Кімнати та рейтинг"><button aria-pressed="true" class="active" data-tab="rooms">Відкриті кімнати</button><button aria-pressed="false" data-tab="leaders">Рейтинг</button></nav>
         <div id="listing" aria-live="polite"></div>
       </section>
       <section id="session" hidden>
-        <div class="turn"><div id="status" role="status"></div><div id="actions" class="toolbar"></div></div>
+        <div class="turn">
+          <div id="status" role="status"></div>
+          <section id="result" aria-label="Підсумки партії" aria-live="polite" hidden></section>
+          <div id="actions" class="toolbar"></div>
+        </div>
         <details id="activity"><summary>Журнал, чат і власність</summary>
-        <nav id="room-tabs" aria-label="Дані партії"><button class="active" data-tab="log">Журнал</button><button data-tab="chat">Чат</button><button data-tab="assets">Власність</button></nav>
+        <nav id="room-tabs" aria-label="Дані партії"><button aria-pressed="true" class="active" data-tab="log">Журнал</button><button aria-pressed="false" data-tab="chat">Чат</button><button aria-pressed="false" data-tab="assets">Власність</button></nav>
         <div id="feed"></div>
         <form id="chat-form" hidden><input maxlength="280" placeholder="Ваше повідомлення" aria-label="Ваше повідомлення" required><button>Надіслати</button></form>
         </details>
       </section>
     </div>
+    <section class="tabletop">
+      <div class="board-frame">
+        <div id="players" aria-label="Гравці"></div>
+        <div id="stage" aria-label="Ігрове поле"></div>
+        <div id="tile-rail" aria-label="Клітинки поля"></div>
+        <div class="stage-foot"><span id="stage-label">20 клітинок</span><div id="camera" aria-label="Камера"><button data-camera="rotate" aria-label="Повернути поле">↻</button><button data-camera="out" aria-label="Віддалити">−</button><button data-camera="in" aria-label="Наблизити">+</button><button data-camera="reset" aria-label="Початковий вигляд">⌂</button></div><button id="catalog">Ділянки</button></div>
+      </div>
+    </section>
   </div>
-  <dialog aria-labelledby="dialog-title"><form method="dialog" class="dialog-head"><span id="sheet-section">Монополія</span><button aria-label="Закрити">×</button></form><div id="sheet"></div></dialog>
+  <dialog aria-labelledby="dialog-title"><form method="dialog" class="dialog-head"><span id="sheet-section">Монополія</span><button aria-label="Закрити">×</button></form><div id="sheet"></div><p id="sheet-error" role="alert" hidden></p></dialog>
 </main>
 <script type="module" src="/game/assets/app.js"></script>
 </body></html>

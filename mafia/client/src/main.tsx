@@ -1,15 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  AnimatePresence,
-  MotionConfig,
-  motion,
-  useReducedMotion,
-} from "motion/react";
-import {
   ArrowLeft,
   BookOpen,
-  Club,
   Gamepad2,
   LogIn,
   Trophy,
@@ -42,8 +35,7 @@ function App() {
   const [code, setCode] = useState(""),
     [watch, setWatch] = useState(false);
   const lock = useRef(false),
-    roomRef = useRef<Room | null>(null),
-    reduce = useReducedMotion();
+    roomRef = useRef<Room | null>(null);
   const put = useCallback((r: Room | null) => {
     roomRef.current = r;
     setRoom(r);
@@ -221,8 +213,17 @@ function App() {
     }
   };
   const screen = room ? room.code + "-" + room.step : page;
+  const lastScreen = useRef(screen);
   useEffect(() => {
+    document.title = (document.querySelector("main h1")?.textContent || "Мафія") + " · Ігротека 86";
+    if (lastScreen.current === screen) return;
+    lastScreen.current = screen;
     window.scrollTo(0, 0);
+    const heading = document.querySelector<HTMLElement>("main h1");
+    if (heading) {
+      heading.tabIndex = -1;
+      heading.focus({preventScroll: true});
+    }
   }, [screen]);
   return (
     <div
@@ -235,14 +236,11 @@ function App() {
             : "neutral"
       }
     >
-      <div className="ambient" aria-hidden="true" />
       <header className="brandbar">
-        <span className="brand">
-          <span className="brandmark">
-            <Club fill="currentColor" />
-          </span>
-          Ігротека <b>86</b>
-        </span>
+        <a className="brand" href="/app/#entertainment" aria-label="Ігротека ліцею — до розваг">
+          <span className="brandmark" aria-hidden="true">86</span>
+          Ігротека
+        </a>
         <span className="edition">
           {room ? "Ігрова кімната" : "Клуб настільних ігор"}
         </span>
@@ -259,14 +257,8 @@ function App() {
         </div>
       )}
       <main>
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={screen}
-            initial={reduce ? false : { opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={reduce ? undefined : { opacity: 0 }}
-            transition={{ duration: reduce ? 0 : 0.16 }}
-          >
+        {booting && <p className="boot" role="status">Перевіряємо доступ…</p>}
+        <div key={screen} className="page-transition">
             {room ? (
               <Table r={room} cmd={command} busy={busy} />
             ) : page === "menu" ? (
@@ -331,11 +323,10 @@ function App() {
                 name={home?.name || "Гравець"}
               />
             )}
-          </motion.div>
-        </AnimatePresence>
+        </div>
       </main>
       {!room && (
-        <nav aria-label="Головна навігація">
+        <nav className="bottom-nav" aria-label="Головна навігація">
           {tabs.map(([id, title, Icon]) => (
             <button
               key={id}
@@ -356,7 +347,5 @@ function App() {
   );
 }
 createRoot(document.getElementById("root")!).render(
-  <MotionConfig reducedMotion="user">
-    <App />
-  </MotionConfig>,
+  <App />,
 );

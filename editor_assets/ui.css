@@ -1,0 +1,34 @@
+/* Shared dimensions and browser/WebView behaviour for the three Mini Apps. */
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius: 8px;
+  --touch: 44px;
+  --ease: cubic-bezier(.2,.7,.3,1);
+  --safe-top: max(env(safe-area-inset-top, 0px), calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px)));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), calc(var(--tg-safe-area-inset-bottom, 0px) + var(--tg-content-safe-area-inset-bottom, 0px)));
+  --safe-left: max(env(safe-area-inset-left, 0px), calc(var(--tg-safe-area-inset-left, 0px) + var(--tg-content-safe-area-inset-left, 0px)));
+  --safe-right: max(env(safe-area-inset-right, 0px), calc(var(--tg-safe-area-inset-right, 0px) + var(--tg-content-safe-area-inset-right, 0px)));
+  --app-height: min(100dvh, var(--tg-viewport-stable-height, 100dvh));
+  -webkit-text-size-adjust: 100%;
+  scroll-padding-block: calc(var(--safe-top) + 12px) calc(var(--safe-bottom) + 76px);
+}
+*, *::before, *::after {box-sizing: border-box}
+[hidden] {display: none !important}
+body {margin: 0; font-family: Inter, system-ui, sans-serif}
+button, input, select, textarea {font: inherit; color: inherit}
+button, a, summary, input, label {touch-action: manipulation}
+button, a, summary {-webkit-tap-highlight-color: transparent}
+button:not(:disabled), summary {cursor: pointer}
+button:disabled {cursor: default}
+:focus-visible {outline: 2px solid var(--focus, currentColor); outline-offset: 3px}
+input, select, textarea {max-width: 100%; min-width: 0}
+[data-keyboard] {scroll-padding-bottom: 16px}
+[data-keyboard] .bottom-nav {display: none}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {scroll-behavior: auto !important}
+}

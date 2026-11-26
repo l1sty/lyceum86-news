@@ -87,10 +87,6 @@ export function Rules({ initial }: { initial?: Role }) {
   const [opened, setOpened] = useState<Role | undefined>(initial);
   return (
     <article className="page">
-      <div className="overline">
-        <i />
-        За ігровим столом
-      </div>
       <h1>Правила</h1>
       <p className="lead">
         Місто виграє, коли викриє всю мафію. Мафії достатньо зрівнятися
@@ -107,7 +103,7 @@ export function Rules({ initial }: { initial?: Role }) {
                 setOpened(opened === r ? undefined : r);
               }}
             >
-              <img src={art(r)} alt="" />
+              <img src={art(r)} alt="" loading="lazy" width="56" height="56" />
               <strong>{roles[r][0]}</strong>
               <ChevronDown size={17} />
             </button>
@@ -162,10 +158,6 @@ export function Archive({ profile, name }: { profile: boolean; name: string }) {
   }, [retry, profile]);
   return (
     <section className="page">
-      <div className="overline">
-        <i />
-        {profile ? "Особова справа" : "Архів партій"}
-      </div>
       <h1>{profile ? "Профіль" : "Рейтинг"}</h1>
       {error ? (
         <div role="alert">

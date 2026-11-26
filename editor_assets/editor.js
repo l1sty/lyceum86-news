@@ -1,6 +1,19 @@
 export function initializeEditor(workspace, authHeaders) {
   const el = id => workspace.querySelector('#' + id);
   let nonce, url;
+  const dialog = el('editor-confirm');
+  function confirmAction(trigger, title, message, action) {
+    el('confirm-title').textContent = title;
+    el('confirm-message').textContent = message;
+    dialog.querySelector('.danger').textContent = action;
+    dialog.returnValue = '';
+    dialog.showModal();
+    return new Promise(resolve => dialog.addEventListener('close', () => {
+      if (!workspace.hidden && trigger.isConnected) trigger.focus({preventScroll:true});
+      resolve(dialog.returnValue === 'confirm');
+    }, {once:true}));
+  }
+  window.addEventListener('hashchange', () => { if (dialog.open) dialog.close(); });
   function update() {
     const size = el('body').value.trim().length;
     const limit = el('file').files.length ? 1000 : 4000;
@@ -50,7 +63,9 @@ export function initializeEditor(workspace, authHeaders) {
   };
   el('edit').onclick = () => showPreview(false);
   async function call(options = {}, path = '/api/editor') {
-    const r = await fetch(path, {...options, headers: authHeaders()});
+    let r;
+    try {r = await fetch(path, {...options, headers: authHeaders()});}
+    catch {throw Error('Немає зв’язку із сервером. Перевірте інтернет і спробуйте ще раз.');}
     if (!r.ok) {
       const data = await r.json().catch(() => ({}));
       throw Error(data.error || 'Не вдалося виконати запит. Спробуйте ще раз.');
@@ -134,7 +149,7 @@ export function initializeEditor(workspace, authHeaders) {
     });
     const remove = node('button','Видалити опитування',article);
     remove.onclick = async () => {
-      if (!window.confirm('Видалити опитування «'+item.question+'» та всі його голоси?')) return;
+      if (!await confirmAction(remove, 'Видалити опитування?', '«'+item.question+'». Усі голоси буде видалено.', 'Видалити')) return;
       remove.disabled = true;
       try {
         await call({method:'DELETE'},'/api/polls/'+item.id);
@@ -206,9 +221,9 @@ export function initializeEditor(workspace, authHeaders) {
       }
     }
   }
-  workspace.querySelectorAll('[data-refresh]').forEach(b=>b.onclick=()=>{
+  workspace.querySelectorAll('[data-refresh]').forEach(b=>b.onclick=async()=>{
     if (b.dataset.refresh==='cases' && el('casesList').querySelector('[data-dirty]') &&
-        !window.confirm('Оновити список і відкинути незбережені зміни?')) return;
+        !await confirmAction(b, 'Оновити список?', 'Незбережені зміни у зверненнях буде втрачено.', 'Оновити')) return;
     loadList(b.dataset.refresh);
   });
   let pollNonce=crypto.randomUUID();
@@ -234,6 +249,9 @@ export function initializeEditor(workspace, authHeaders) {
   const tabGroup = workspace.querySelector('.editor-tabs');
   const content = workspace.querySelector('.editor-content');
   return async function checkAccess() {
+    el('access-retry').hidden = true;
+    access.hidden = false;
+    access.textContent = 'Перевіряємо доступ…';
     try {
       await call();
       tabs.forEach(tab => { tab.disabled = false; });
@@ -245,6 +263,7 @@ export function initializeEditor(workspace, authHeaders) {
     } catch (error) {
       tabGroup.hidden = content.hidden = true;
       access.textContent = error.message;
+      el('access-retry').hidden = false;
       access.hidden = false;
     }
   };

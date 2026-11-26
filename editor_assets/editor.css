@@ -1,6 +1,6 @@
 #editor-workspace {
-  --editor-field: #141a22;
-  --editor-border: #3c4b61;
+  --editor-field: var(--card);
+  --editor-border: #969c97;
   margin-top: 20px;
   overflow-wrap: anywhere;
 }
@@ -10,18 +10,18 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   padding: 6px;
-  background: #191e26;
-  border: 1px solid #36404e;
-  border-radius: 18px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
 }
 
 #editor-workspace button, #editor-workspace .attach {
   min-height: 44px;
   padding: 9px 13px;
   border: 1px solid var(--editor-border);
-  border-radius: 12px;
-  color: #e5efff;
-  background: #202b39;
+  border-radius: var(--radius);
+  color: var(--ink);
+  background: var(--card);
   font: inherit;
   font-weight: 600;
 }
@@ -41,23 +41,23 @@
 }
 
 #editor-workspace .editor-tabs button[aria-pressed="true"] {
-  border-color: #45638a;
-  background: linear-gradient(155deg, #304c70, #233349);
-  color: #e5efff;
+  border-color: var(--line);
+  background: var(--accent-soft);
+  color: var(--ink);
 }
 
 .editor-tabs span {display: flex; flex-shrink: 0; color: var(--blue)}
 .editor-tabs svg {width: 18px; height: 18px}
 #editor-workspace button:disabled {opacity: .55; cursor: default}
-#editor-workspace .primary {width: 100%; background: #bdd9ff; border-color: transparent; color: #152942}
-#editor-workspace .primary:enabled:hover {background: #d8e9ff}
+#editor-workspace .primary {width: 100%; background: var(--blue); border-color: transparent; color: white}
+#editor-workspace .primary:enabled:hover {background: var(--accent-ink)}
 
 .editor-content :is(fieldset, #confirmation, #pollform, .results, details) {
   min-width: 0;
   margin: 0;
   padding: clamp(14px, 3vw, 20px);
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--radius);
   background: var(--card);
 }
 
@@ -90,7 +90,7 @@
 
 .editor-content textarea {min-height: 110px; resize: vertical}
 .editor-content #body {min-height: 145px}
-.editor-content :is(textarea, input)::placeholder {color: #9ea8b7}
+.editor-content :is(textarea, input)::placeholder {color: var(--muted)}
 .editor-content :is(textarea, select, input, summary):focus-visible,
 .editor-content .attach:focus-within {outline: 2px solid var(--blue); outline-offset: 3px}
 .editor-content .attach {display: inline-flex; align-items: center; position: relative; overflow: hidden}
@@ -105,7 +105,7 @@
 .editor-content .item {padding: 12px 0; border-top: 1px solid var(--line)}
 .editor-content .item h3 {margin: 0 0 4px}
 .editor-content meter {display: block; width: 100%; margin: 4px 0 10px; accent-color: var(--blue)}
-.editor-content meter::-webkit-meter-bar {background: #2b3543; border: 0}
+.editor-content meter::-webkit-meter-bar {background: var(--line); border: 0}
 .editor-content meter::-webkit-meter-optimum-value {background: var(--blue)}
 #editor-workspace [role=status] {color: var(--blue)}
 #editor-workspace [role=status]:empty {display: none}
@@ -125,3 +125,14 @@
     from {opacity: 0; transform: translateY(5px)}
   }
 }
+
+.editor-content {margin-top: var(--space-6)}
+.editor-content .row > *, .editor-tabs button {min-width: 0}
+.editor-tabs button {padding-inline: 6px !important}
+.editor-content .attach {cursor: pointer}
+.editor-content .actions {margin-top: 18px}
+#editor-confirm {width: min(440px, calc(100% - 32px - var(--safe-left) - var(--safe-right))); max-height: calc(var(--app-height) - var(--safe-top) - var(--safe-bottom) - 24px); overflow: auto; padding: 20px; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius)}
+#editor-confirm::backdrop {background: #17201fc2}
+#editor-confirm h2 {margin: 0 0 12px}
+#editor-confirm form {margin-top: 18px; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px}
+#editor-confirm .danger {background: #942e2e; color: white; border-color: transparent}

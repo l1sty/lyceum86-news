@@ -1,8 +1,4 @@
 :root {
-  --safe-top: calc(max(env(safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px)) + var(--tg-content-safe-area-inset-top, 0px));
-  --safe-bottom: calc(max(env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px)) + var(--tg-content-safe-area-inset-bottom, 0px));
-  --safe-left: calc(max(env(safe-area-inset-left, 0px), var(--tg-safe-area-inset-left, 0px)) + var(--tg-content-safe-area-inset-left, 0px));
-  --safe-right: calc(max(env(safe-area-inset-right, 0px), var(--tg-safe-area-inset-right, 0px)) + var(--tg-content-safe-area-inset-right, 0px));
   --gutter: clamp(14px, 4vw, 52px);
   scroll-padding-block: calc(10px + var(--safe-top)) calc(72px + var(--safe-bottom));
   -webkit-text-size-adjust: 100%;
@@ -99,24 +95,8 @@ img {
   letter-spacing: -0.045em;
   font-weight: 650;
 }
-.brand b {
-  font-size: 12px;
-  color: var(--accent);
-  align-self: flex-start;
-  padding-top: 2px;
-}
-.brandmark {
-  width: 29px;
-  height: 29px;
-  justify-content: center;
-  background: var(--red);
-  border-radius: 2px;
-  transform: rotate(-6deg);
-  margin-right: 3px;
-}
-.brandmark svg {
-  width: 17px;
-}
+.brand {min-height: var(--touch); color: var(--paper); text-decoration: none}
+.brandmark {width: 32px; height: 32px; justify-content: center; padding-right: 3px; background: var(--paper); color: var(--ink); font: bold italic 23px/1 Georgia, serif; letter-spacing: -.09em}
 .edition,
 .overline,
 small,
@@ -294,12 +274,9 @@ h2 {
   aspect-ratio: 1.55;
   object-fit: cover;
   object-position: 50% 24%;
-  filter: saturate(0.77);
-  transition: filter 0.25s;
+  border-radius: 4px;
 }
-.cast button:hover img {
-  filter: saturate(1.2);
-}
+.cast button:hover span {text-decoration: underline; text-underline-offset: 3px}
 .cast span {
   display: block;
   margin-top: 7px;
@@ -309,7 +286,7 @@ h2 {
 nav {
   position: fixed;
   z-index: 4;
-  bottom: 0;
+  bottom: max(0px, calc(100dvh - var(--app-height)));
   left: 0;
   right: 0;
   display: flex;
@@ -495,24 +472,6 @@ input::placeholder {
 .table {
   position: relative;
   isolation: isolate;
-}
-.table:before {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  inset: -14px -12px auto;
-  height: 120px;
-  background: #272329;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.65s;
-}
-.lighting-night:before {
-  opacity: 0.61;
-}
-.lighting-day:before {
-  background: #392f24;
-  opacity: 0.44;
 }
 .timer {
   flex-shrink: 0;
@@ -804,7 +763,7 @@ select {
     flex-direction: column;
     gap: 3px;
     min-height: 56px;
-    font-size: 11px;
+    font-size: 12px;
   }
   .role-card > div {
     padding: 12px;
@@ -858,28 +817,31 @@ select {
   }
 }
 
-.ambient {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background: var(--ink);
+.boot {margin: 16px auto; color: var(--muted)}
+.cover-art, .role-card, .chat {border-radius: var(--radius)}
+.cover-actions button, .secret-toggle, .primary, .secondary, .target-list button {border-radius: 6px}
+.cover-actions .primary, .cover-actions .secondary {min-height: 48px}
+.room-code, .stats {padding: 16px; background: var(--panel); border-radius: var(--radius)}
+.stats {display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px}
+.stats strong {font-variant-numeric: tabular-nums}
+.target-list button, .controls button {overflow-wrap: anywhere}
+.page, .cover-copy, .notice > span {min-width: 0}
+button.leave, .notice button, .icon, .compose button {min-height: var(--touch); min-width: var(--touch)}
+.roster em {text-align: end}
+[data-light=night] .table-top {color: #c8d3ef}
+[data-light=day] .table-top {color: #ead8ba}
+.table-top .overline {color: inherit}
+@media (min-width: 681px) {
+  .cover-actions {grid-template-columns: repeat(2,minmax(0,1fr)); max-width: 460px}
+  .cover-actions button {padding-inline: 10px}
 }
-.ambient:before,
-.ambient:after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  transition: opacity 0.7s ease;
+@media (prefers-reduced-motion: reduce) {
+  .primary:active:enabled, .secondary:active:enabled {transform: none}
 }
-.ambient:before {
-  background: #15151c;
-}
-.ambient:after {
-  background: #1b1817;
-}
-[data-light="night"] .ambient:before,
-[data-light="day"] .ambient:after {
-  opacity: 1;
+
+.page-transition h1[tabindex="-1"]:focus {outline: none}
+@media (prefers-reduced-motion: no-preference) {
+  .page-transition, .role-card {animation: enter .16s var(--ease)}
+  @keyframes enter {from {opacity: .8; transform: translateY(3px)}}
+  .target-list button:active:enabled {transform: translateY(1px)}
 }

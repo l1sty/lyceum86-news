@@ -28,6 +28,8 @@
 
 З кореня проєкту команда `python -m unittest discover -v` перевіряє бот і правила гри. Для браузерної перевірки встановіть Playwright (`python -m pip install playwright`, `python -m playwright install chromium`) і виконайте `python -m mafia.browser_check`. Перевірка створює тимчасову базу, шість окремих гравців і спостерігача.
 
+`python -m ui_browser_check` перевіряє навігацію Telegram, редакторські діалоги, голосування та вхід у кімнати «Монополії» на дев’яти розмірах екрана. Обидві браузерні перевірки працюють із локальними тестовими користувачами.
+
 ## Запуск у Windows
 
 Відкрийте Start.cmd у папці windows. [Докладна інструкція](windows/README.md).

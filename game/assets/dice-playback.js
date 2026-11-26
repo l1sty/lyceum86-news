@@ -52,7 +52,7 @@ export function dicePlayback(dice, shadows, cue, invalidate) {
     invalidate();
   }
   function warm() {
-    if (worker || !window.Worker || !window.WebAssembly) return;
+    if (worker || !window.Worker || !window.WebAssembly || navigator.connection?.saveData) return;
     try {
       worker = new Worker(new URL('./dice-worker.js', import.meta.url), {type:'module'});
       worker.onmessage = ({data}) => {
